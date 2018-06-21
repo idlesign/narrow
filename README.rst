@@ -2,7 +2,7 @@ narrow
 ======
 https://github.com/idlesign/narrow
 
-|release|  |lic|
+|release| |lic|
 
 .. |release| image:: https://img.shields.io/pypi/v/narrow.svg
     :target: https://pypi.python.org/pypi/narrow
@@ -21,7 +21,7 @@ Description
 
 This tries to measure a throughput for various Python web apps and servers
 
-Benchmark report sample: ...
+Benchmark report sample: https://idlesign.github.io/narrow/
 
 
 Requirements
@@ -42,8 +42,8 @@ Benchmarking tools (any):
 Running
 -------
 
-Run benchmarks and plot the results:
+Run benchmarks, dump and plot the results:
 
 .. code-block:: bash
 
-    $ narrow run --plot
+    $ narrow runlocal --plot
