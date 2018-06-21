@@ -1,0 +1,151 @@
+from ._base import register_stand, Stand
+from .uwsgi import UwsgiUwsgiPy
+from ..configuration import get_path_in_current, get_ssl_tuple, Settings
+from ..utils import run_command_detached, save_to_tmp, get_logger, run_command
+
+LOG = get_logger(__name__)
+
+
+@register_stand
+class Nginx(Stand):
+
+    alias = 'nginx'
+    address = '127.0.0.1:8001'
+    prc_name = 'nginx'
+
+    def get_version(self):
+        return run_command('%s -v' % self.prc_name).replace('nginx version: ', '')
+
+    @property
+    def location(self):
+        return '/%s' % self.alias
+
+    @property
+    def location_commands(self):
+        return "return 200 'Hello there!';"
+
+    @property
+    def port(self):
+        _, _, port_ = self.address.partition(':')
+        return port_
+
+    def get_config(self):
+
+        if Settings.LOG_WRITE:
+            log_path_access = get_path_in_current('log_%s_access.log' % self.alias)
+            log_path_error = get_path_in_current('log_%s_error.log' % self.alias)
+
+        else:
+            log_path_access = log_path_error = '/dev/null'
+
+        config = '''
+        pid /tmp/narrow_nginx.pid;
+        daemon off;
+        worker_processes 1;
+        
+        events {
+            worker_connections %(max_connections)s;
+        }
+        
+        error_log %(log_error)s;
+        
+        http {
+            server {
+            
+                access_log %(log_access)s;
+                
+                listen %(port)s backlog=%(max_connections)s;
+                server_name _;
+                
+                location %(location_path)s {
+                     %(location_commands)s
+                }
+            }
+        }
+        ''' % dict(
+            port=self.port,
+            max_connections=Settings.MAX_CONNECTIONS,
+            location_path=self.location,
+            location_commands=self.location_commands,
+            log_access=log_path_access,
+            log_error=log_path_error,
+        )
+
+        return config
+
+    def bootstrap(self):
+        super().bootstrap()
+
+        config = self.get_config()
+        filepath = save_to_tmp(prefix=self.alias, contents=config)
+
+        LOG.debug('Nginx config: %s', filepath)
+
+        return run_command_detached('%s -c %s' % (self.prc_name, filepath))
+
+
+@register_stand
+class NginxSsl(Nginx):
+
+    alias = 'nginx_ssl'
+    address = '127.0.0.1:4443'
+    protocol = 'https'
+
+    def get_config(self):
+        config = super().get_config()
+
+        cert, key = get_ssl_tuple()
+
+        config = config.replace('backlog=', 'ssl backlog=')
+        config = config.replace(
+            'server_name _;', 'ssl_certificate %s;\n'
+                              'ssl_certificate_key %s;\n'
+                              'server_name _;' % (cert, key))
+
+        return config
+
+
+class NginxWithUwsgiBackend:
+
+    unix_socket = False
+
+    def __init__(self):
+        super().__init__()
+        self.child = UwsgiUwsgiPy(unix=self.unix_socket)
+
+    @property
+    def location_commands(self):
+        address = self.child.address
+
+        if self.unix_socket:
+            address = 'unix://%s' % address
+
+        return 'uwsgi_pass %s;' % address
+
+
+@register_stand
+class NginxSslUnixUwsgiPy(NginxWithUwsgiBackend, NginxSsl):
+
+    unix_socket = True
+
+    alias = 'nginx_ssl_unix_uwsgi_py'
+
+
+@register_stand
+class NginxSslTcpUwsgiPy(NginxWithUwsgiBackend, NginxSsl):
+
+    alias = 'nginx_ssl_tcp_uwsgi_py'
+
+
+@register_stand
+class NginxUnixUwsgiPy(NginxWithUwsgiBackend, Nginx):
+
+    unix_socket = True
+
+    alias = 'nginx_unix_uwsgi_py'
+
+
+@register_stand
+class NginxTcpUwsgiPy(NginxWithUwsgiBackend, Nginx):
+
+    alias = 'nginx_tcp_uwsgi_py'
