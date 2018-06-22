@@ -23,11 +23,21 @@ def register_bencher(cls):
 StatsItem = namedtuple('ResultItem', ['clients', 'requests', 'rps'])
 
 
-def stats_dump(stats):
+def stats_dump(stats, update=True):
     stats['meta']['versions'] = sorted(set(stats['meta']['versions']))
 
+    base_stats = {}
+
+    if update:
+        try:
+            base_stats = stats_load()
+        except:
+            pass
+
+    base_stats.update(stats)
+
     with open(Settings.FILENAME_STATS_DUMP, 'w') as f:
-        f.write(json.dumps(stats))
+        f.write(json.dumps(base_stats))
 
 
 def stats_load():
