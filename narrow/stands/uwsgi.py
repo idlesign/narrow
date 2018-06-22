@@ -2,7 +2,7 @@ from uwsgiconf.presets.nice import PythonSection
 
 from ._base import register_stand, Stand
 from ..configuration import get_path_in_current, get_path_in_package, Settings, get_ssl_tuple
-from ..utils import create_socket_file, get_logger, run_command_detached, run_command
+from ..utils import create_socket_file, get_logger, run_command_detached, run_command, check_process
 
 sockets = PythonSection.networking.sockets
 
@@ -10,6 +10,12 @@ LOG = get_logger(__name__)
 
 
 class Uwsgi(Stand):
+    """
+
+    For SSL support compile uwsgi on system having:
+        sudo apt install libssl-dev
+
+    """
 
     prc_name = 'uwsgi'
 
@@ -55,7 +61,12 @@ class Uwsgi(Stand):
 
         LOG.debug('Uwsgi config: %s', filepath)
 
-        return run_command_detached('%s --ini %s' % (self.prc_name, filepath))
+        prc = run_command_detached('%s --ini %s' % (self.prc_name, filepath))
+
+        # Check for early exit in case of a misconfiguration.
+        check_process(prc)
+
+        return prc
 
 
 @register_stand

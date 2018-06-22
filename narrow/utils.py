@@ -6,6 +6,10 @@ from tempfile import NamedTemporaryFile
 from .exceptions import NarrowException
 
 
+if False:
+    from subprocess import Popen
+
+
 def get_logger(name):
     return logging.getLogger(name)
 
@@ -35,10 +39,24 @@ def run_command_detached(cmd):
     """
     :param cmd:
     :param args:
-    :rtype: subprocess.Popen
+    :rtype: Popen
     """
     LOG.debug('Run command detached: %s', cmd)
     return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+
+def check_process(prc):
+    """
+    :param Popen prc:
+    """
+    try:
+        prc.wait(0.01)
+
+    except subprocess.TimeoutExpired:
+        pass
+
+    if prc.returncode:
+        raise NarrowException('%s' % prc.stdout.read().decode('utf-8'))
 
 
 def get_named_tmp(*, prefix, suffix):
