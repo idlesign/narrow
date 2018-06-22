@@ -39,16 +39,6 @@ def get_path_in_current(filename):
 
 def bootstrap():
     """
-
-    From http://brianmcdonnell.github.io/pycon_ie_2013/
-
-        ulimit -Hn 131072
-        ulimit -Sn 65536
-
-        sysctl -w net.core.somaxconn=8191
-        sysctl -w net.ipv4.tcp_max_syn_backlog=8191
-
-
     SSL stuff (for `files` dir):
 
         # private key
@@ -63,16 +53,41 @@ def bootstrap():
         openssl x509 -in test.cer -text -noout
 
     """
-    max_conn = int(run_command('cat /proc/sys/net/core/somaxconn'))
-    tcp_backlog = int(run_command('cat /proc/sys/net/ipv4/tcp_max_syn_backlog'))
+    env_info = get_environment_info()
 
-    ulimit_soft = run_command('ulimit -S')
-    ulimit_hard = run_command('ulimit -H')
+    Settings.MAX_CONNECTIONS = env_info['max_conn']
 
-    LOG.info('Current net.ipv4.tcp_max_syn_backlog = %s', tcp_backlog)
-    LOG.info('Current net.core.somaxconn = %s', max_conn)
+    return env_info
 
-    LOG.info('Current ulimit soft = %s', ulimit_soft)
-    LOG.info('Current ulimit hard = %s', ulimit_hard)
 
-    Settings.MAX_CONNECTIONS = max_conn
+def get_environment_info():
+    """
+
+    From http://brianmcdonnell.github.io/pycon_ie_2013
+
+        ulimit -Hn 131072
+        ulimit -Sn 65536
+
+        sysctl -w net.core.somaxconn=8191
+        sysctl -w net.ipv4.tcp_max_syn_backlog=8191
+
+    :rtype: dict
+    """
+    env_info = dict(
+
+        max_conn = int(run_command('cat /proc/sys/net/core/somaxconn')),
+        tcp_backlog = int(run_command('cat /proc/sys/net/ipv4/tcp_max_syn_backlog')),
+
+        ulimit_soft = run_command('ulimit -S'),
+        ulimit_hard = run_command('ulimit -H'),
+
+    )
+
+    LOG.info(
+        'Current net.ipv4.tcp_max_syn_backlog = %(tcp_backlog)s\n'
+        'Current net.core.somaxconn = %(max_conn)s\n'
+        'Current ulimit soft = %(ulimit_soft)s\n'
+        'Current ulimit hard = %(ulimit_hard)s' % env_info
+    )
+
+    return env_info
