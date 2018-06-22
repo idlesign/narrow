@@ -41,7 +41,7 @@ setup(
 
     install_requires=[
         'uwsgi',
-        'uwsgiconf',
+        'uwsgiconf>=0.14.2',
         'click',
         'plotly',
         'envbox',
