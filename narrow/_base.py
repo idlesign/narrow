@@ -17,3 +17,9 @@ class PythonComponent(Component):
 
     def get_version(self):
         return run_command('%s --version' % self.prc_name)
+
+
+class OSComponent(Component):
+
+    def get_version(self):
+        return run_command('uname -srp')
