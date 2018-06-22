@@ -1,5 +1,6 @@
 from time import sleep
 
+from ._base import PythonComponent
 from .benchers import BENCHERS
 from .configuration import bootstrap
 from .stands import STANDS
@@ -34,6 +35,8 @@ def gather_stats(*, bencher_alias, stand_alias=None):
         },
         'items': stats_items,
     }
+
+    versions.append(PythonComponent().get_version())
 
     if not bencher_alias:
         bencher_alias = list(BENCHERS.keys())[0]
