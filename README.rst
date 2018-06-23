@@ -38,6 +38,7 @@ Apps/frameworks:
 
 * bottle: Bottle framework application
 * cherrypy: CherryPy framework application
+* django: Django framework application
 * flask: Flask framework application
 * py: Pure wsgi application -- default
 
