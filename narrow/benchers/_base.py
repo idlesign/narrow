@@ -59,7 +59,7 @@ class Bencher(Component):
     max_clients = 64
 
     def run(self, stand):
-        url = stand.protocol + '://' + stand.address + '/' + stand.alias
+        url = stand.protocol + '://' + stand.address + '/'
         return self.benchmark(url)
 
     def benchmark(self, url):

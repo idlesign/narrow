@@ -19,6 +19,25 @@ class Uwsgi(Stand):
 
     prc_name = 'uwsgi'
 
+    @property
+    def params_stub(self):
+        params = (
+            'uwsgi_param QUERY_STRING $query_string;\n'
+            'uwsgi_param REQUEST_METHOD $request_method;\n'
+            'uwsgi_param CONTENT_TYPE $content_type;\n'
+            'uwsgi_param CONTENT_LENGTH $content_length;\n'
+            'uwsgi_param REQUEST_URI $request_uri;\n'
+            'uwsgi_param PATH_INFO $document_uri;\n'
+            'uwsgi_param DOCUMENT_ROOT $document_root;\n'
+            'uwsgi_param SERVER_PROTOCOL $server_protocol;\n'
+            'uwsgi_param REMOTE_ADDR $remote_addr;\n'
+            'uwsgi_param REMOTE_PORT $remote_port;\n'
+            'uwsgi_param SERVER_ADDR $server_addr;\n'
+            'uwsgi_param SERVER_PORT $server_port;\n'
+            'uwsgi_param SERVER_NAME $server_name;\n'
+        )
+        return params
+
     def get_version(self):
         return 'uwsgi %s' % run_command('%s --version' % self.prc_name)
 
@@ -61,12 +80,7 @@ class Uwsgi(Stand):
 
         LOG.debug('Uwsgi config: %s', filepath)
 
-        prc = run_command_detached('%s --ini %s' % (self.prc_name, filepath))
-
-        # Check for early exit in case of a misconfiguration.
-        check_process(prc)
-
-        return prc
+        return run_command_detached('%s --ini %s' % (self.prc_name, filepath))
 
 
 @register_stand
@@ -93,7 +107,7 @@ class UwsgiSslPy(Uwsgi):
         return sockets.https(self.address, cert=cert, key=key)
 
 
-class UwsgiUwsgiPy(Uwsgi):
+class UwsgiUwsgiSocket(Uwsgi):
 
     address = '127.0.0.1:8003'
 

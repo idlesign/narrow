@@ -35,14 +35,21 @@ def run_command(cmd, check=True):
     return out
 
 
-def run_command_detached(cmd):
+def run_command_detached(cmd, check=True):
     """
     :param cmd:
     :param args:
     :rtype: Popen
     """
     LOG.debug('Run command detached: %s', cmd)
-    return subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    prc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+    # Check for early exit in case of a misconfiguration.
+    if check:
+        check_process(prc)
+
+    return prc
 
 
 def check_process(prc):
@@ -50,7 +57,7 @@ def check_process(prc):
     :param Popen prc:
     """
     try:
-        prc.wait(0.01)
+        prc.wait(1)
 
     except subprocess.TimeoutExpired:
         pass

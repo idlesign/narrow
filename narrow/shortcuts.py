@@ -46,14 +46,16 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_alias=None):
         'items': stats_items,
     }
 
+    app = get_component(APPS, app_alias)()
+    app_version = app.get_version()
+
+    bencher = get_component(BENCHERS, bencher_alias)()
+
     versions.extend([
         OSComponent().get_version(),
         PythonComponent().get_version(),
+        bencher.get_version(),
     ])
-
-    app = get_component(APPS, app_alias)()
-    bencher = get_component(BENCHERS, bencher_alias)()
-    versions.append(bencher.get_version())
 
     for alias, stand in STANDS.items():
 
@@ -66,5 +68,7 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_alias=None):
             with stand.setup(app):
                 results = bencher.run(stand)
                 stats_items[stand.get_alias_full()] = results
+
+    versions.append(app_version)
 
     return stats

@@ -33,12 +33,13 @@ def entry_point(verbose):
 @click.option('--stand', help='Stand alias')
 @click.option('--bencher', help='Benchmark tool alias')
 @click.option('--plot', help='Plot collected stats', is_flag=True)
-def runlocal(log, stand, bencher, plot):
+@option_app
+def runlocal(log, stand, bencher, plot, app):
     """Runs stands and benchmarks locally.
     """
     Settings.LOG_WRITE = log
 
-    stats = gather_stats(bencher_alias=bencher, stand_alias=stand)
+    stats = gather_stats(bencher_alias=bencher, stand_alias=stand, app_alias=app)
 
     stats_dump(stats)
 

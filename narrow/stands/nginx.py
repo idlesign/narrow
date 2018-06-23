@@ -1,7 +1,7 @@
 from ._base import register_stand, Stand
-from .uwsgi import UwsgiUwsgiPy
+from .uwsgi import UwsgiUwsgiSocket
 from ..configuration import get_path_in_current, get_ssl_tuple, Settings
-from ..utils import run_command_detached, save_to_tmp, get_logger, run_command
+from ..utils import run_command_detached, save_to_tmp, get_logger, run_command, check_process
 
 LOG = get_logger(__name__)
 
@@ -16,7 +16,7 @@ class NginxBase(Stand):
 
     @property
     def location(self):
-        return '/%s' % self.alias
+        return '/'
 
     @property
     def location_commands(self):
@@ -122,16 +122,21 @@ class NginxWithUwsgiBackend:
 
     def __init__(self):
         super().__init__()
-        self.child = UwsgiUwsgiPy(unix=self.unix_socket)
+        self.child = UwsgiUwsgiSocket(unix=self.unix_socket)
 
     @property
     def location_commands(self):
-        address = self.child.address
+        uwsgi = self.child
+
+        address = uwsgi.address
 
         if self.unix_socket:
             address = 'unix://%s' % address
 
-        return 'uwsgi_pass %s;' % address
+        commands = 'uwsgi_pass %s;\n' % address
+        commands += uwsgi.params_stub
+        
+        return commands
 
 
 @register_stand
