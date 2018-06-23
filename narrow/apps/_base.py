@@ -19,19 +19,8 @@ def register_app(cls):
 
 class App(Component):
 
-    entrypoint = None
-
     def get_version(self):
         return ''
 
     def get_entrypoint_path(self):
-        return get_path_in_package('apps/entrypoints/%s.py' % self.entrypoint)
-
-
-@register_app
-class PurePy(App):
-
-    alias = 'py'
-    entrypoint = 'pure'
-    description = 'Pure wsgi application'
-
+        return get_path_in_package('apps/entrypoints/%s.py' % self.alias)
