@@ -24,7 +24,7 @@ def stand_run(*, stand_alias, app_alias=None):
     bootstrap()
 
     stand = STANDS[stand_alias]
-    app = get_component(APPS, app_alias)
+    app = get_component(APPS, app_alias)()
 
     with stand.setup(app):
         while True:
