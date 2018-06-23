@@ -13,4 +13,4 @@ class Bottle(App):
 
     def get_version(self):
         from bottle import __version__
-        return 'bottle %s' % __version__
+        return 'Bottle %s' % __version__

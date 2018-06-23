@@ -13,4 +13,4 @@ class Flask(App):
 
     def get_version(self):
         from flask import __version__
-        return 'flask %s' % __version__
+        return 'Flask %s' % __version__
