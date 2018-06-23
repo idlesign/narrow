@@ -33,7 +33,7 @@ class Uwsgi(Stand):
             log_path = '/dev/null'
 
         section = PythonSection(
-            wsgi_module=get_path_in_package('uwsgi_app.py'),
+            wsgi_module=self.app.get_entrypoint_path(),
             process_prefix=alias,
             workers=1,
             threads=1,
@@ -72,7 +72,7 @@ class Uwsgi(Stand):
 @register_stand
 class UwsgiPy(Uwsgi):
 
-    alias = 'uwsgi_py'
+    alias = 'uwsgi'
     address = '127.0.0.1:8002'
 
     @property
@@ -83,7 +83,7 @@ class UwsgiPy(Uwsgi):
 @register_stand
 class UwsgiSslPy(Uwsgi):
 
-    alias = 'uwsgi_ssl_py'
+    alias = 'uwsgi_ssl'
     address = '127.0.0.1:4443'
     protocol = 'https'
 

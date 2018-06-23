@@ -6,10 +6,8 @@ from ..utils import run_command_detached, save_to_tmp, get_logger, run_command
 LOG = get_logger(__name__)
 
 
-@register_stand
-class Nginx(Stand):
+class NginxBase(Stand):
 
-    alias = 'nginx'
     address = '127.0.0.1:8001'
     prc_name = 'nginx'
 
@@ -84,8 +82,7 @@ class Nginx(Stand):
         return run_command_detached('%s -c %s' % (self.prc_name, filepath))
 
 
-@register_stand
-class NginxSsl(Nginx):
+class NginxSslBase(NginxBase):
 
     alias = 'nginx_ssl'
     address = '127.0.0.1:4443'
@@ -103,6 +100,20 @@ class NginxSsl(Nginx):
                               'server_name _;' % (cert, key))
 
         return config
+
+
+@register_stand
+class NginxStatic(NginxBase):
+
+    uses_app = False
+    alias = 'nginx_static'
+
+
+@register_stand
+class NginxSslStatic(NginxBase):
+
+    uses_app = False
+    alias = 'nginx_ssl_static'
 
 
 class NginxWithUwsgiBackend:
@@ -124,28 +135,28 @@ class NginxWithUwsgiBackend:
 
 
 @register_stand
-class NginxSslUnixUwsgiPy(NginxWithUwsgiBackend, NginxSsl):
+class NginxSslUnixUwsgiPy(NginxWithUwsgiBackend, NginxSslBase):
 
     unix_socket = True
 
-    alias = 'nginx_ssl_unix_uwsgi_py'
+    alias = 'nginx_ssl_unix_uwsgi'
 
 
 @register_stand
-class NginxSslTcpUwsgiPy(NginxWithUwsgiBackend, NginxSsl):
+class NginxSslTcpUwsgiPy(NginxWithUwsgiBackend, NginxSslBase):
 
-    alias = 'nginx_ssl_tcp_uwsgi_py'
+    alias = 'nginx_ssl_tcp_uwsgi'
 
 
 @register_stand
-class NginxUnixUwsgiPy(NginxWithUwsgiBackend, Nginx):
+class NginxUnixUwsgiPy(NginxWithUwsgiBackend, NginxBase):
 
     unix_socket = True
 
-    alias = 'nginx_unix_uwsgi_py'
+    alias = 'nginx_unix_uwsgi'
 
 
 @register_stand
-class NginxTcpUwsgiPy(NginxWithUwsgiBackend, Nginx):
+class NginxTcpUwsgiPy(NginxWithUwsgiBackend, NginxBase):
 
-    alias = 'nginx_tcp_uwsgi_py'
+    alias = 'nginx_tcp_uwsgi'

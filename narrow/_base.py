@@ -9,6 +9,9 @@ class Component:
     def get_version(self):
         return '%s x.x' % self.alias
 
+    def get_alias_full(self):
+        return self.alias
+
 
 class PythonComponent(Component):
 

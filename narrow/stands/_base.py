@@ -18,7 +18,7 @@ def register_stand(cls):
 
 
 @contextmanager
-def nullcontext():
+def nullcontext(*args, **kwargs):
     yield
 
 
@@ -26,16 +26,28 @@ class Stand(Component):
 
     address = '0.0.0.0:8000'
     protocol = 'http'
+    uses_app = True
 
     def __init__(self):
         self.prc = None
         self.child = None
+        self.app = None
 
     def get_version(self):
         return '%s x.x' % self.alias
 
+    def get_alias_full(self):
+        app_alias = ''
+
+        if self.uses_app and self.app:
+            app_alias = '_%s' % self.app.get_alias_full()
+
+        return super().get_alias_full() + app_alias
+
     @contextmanager
-    def setup(self):
+    def setup(self, app):
+        self.app = app
+
         contextman = nullcontext
 
         child = self.child
@@ -45,7 +57,7 @@ class Stand(Component):
 
         LOG.info('Working with `%s` stand ...', self.alias)
 
-        with contextman():
+        with contextman(app):
 
             prc = self.bootstrap()
 
@@ -57,6 +69,7 @@ class Stand(Component):
                 yield
 
             finally:
+                self.app = None
                 self.finalize()
 
     def bootstrap(self):

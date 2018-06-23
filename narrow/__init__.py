@@ -1,3 +1,4 @@
+from .apps import APPS
 from .benchers import BENCHERS, stats_dump, stats_load
 from .configuration import bootstrap, Settings
 from .exceptions import NarrowException

@@ -11,6 +11,7 @@ LOG = get_logger(__name__)
 
 
 option_log = click.option('--log', help='Dump logs', is_flag=True)
+option_app = click.option('--app', help='Application (framework) to use')
 
 
 def plot_stats():
@@ -56,14 +57,15 @@ def stats_plot():
 @entry_point.command()
 @click.argument('stand')
 @option_log
-def stand_up(stand, log):
+@option_app
+def stand_up(stand, log, app):
     """Runs stand.
 
     Ctrl+C will brings the stand down.
 
     """
     Settings.LOG_WRITE = log
-    stand_run(stand_alias=stand)
+    stand_run(stand_alias=stand, app_alias=app)
 
 
 def main():
