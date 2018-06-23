@@ -54,8 +54,8 @@ class Uwsgi(Stand):
         section = PythonSection(
             wsgi_module=self.app.get_entrypoint_path(),
             process_prefix=alias,
-            workers=1,
-            threads=1,
+            workers=Settings.WORKERS,
+            threads=Settings.THREADS,
             log_into=log_path,
 
         ).networking.register_socket(

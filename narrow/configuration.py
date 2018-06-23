@@ -7,6 +7,8 @@ from .utils import run_command, get_logger
 
 class _S(SettingsBase):
 
+    WORKERS = 1
+    THREADS = 1
     LOG_WRITE = False
     MAX_CONNECTIONS = 8191
     STOP_ON_BENCHER_ERROR = False

@@ -39,7 +39,7 @@ class NginxBase(Stand):
         config = '''
         pid /tmp/narrow_nginx.pid;
         daemon off;
-        worker_processes 1;
+        worker_processes %(workers)s;
         
         events {
             worker_connections %(max_connections)s;
@@ -67,6 +67,7 @@ class NginxBase(Stand):
             location_commands=self.location_commands,
             log_access=log_path_access,
             log_error=log_path_error,
+            workers=Settings.WORKERS,
         )
 
         return config
