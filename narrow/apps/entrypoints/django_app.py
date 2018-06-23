@@ -8,6 +8,10 @@ settings.configure(
     SECRET_KEY='A-random-secret-key!',
     ROOT_URLCONF=__name__,
     ALLOWED_HOSTS=['localhost', '127.0.0.1'],
+    MIDDLEWARE=[
+        # Sane minimum for http 1.1 (Content-Length)
+        'django.middleware.common.CommonMiddleware',
+    ]
 )
 
 
