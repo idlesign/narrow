@@ -23,6 +23,28 @@ This tries to measure a throughput for various Python web apps and servers
 
 Benchmark report sample: https://idlesign.github.io/narrow/
 
+Stands:
+
+* nginx_ssl_static: Nginx static response using SSL
+* nginx_ssl_tcp_uwsgi: Nginx -> UWSGI -> TCP socket -> uwsgi -> app response. Using SSL
+* nginx_ssl_unix_uwsgi: Nginx -> UWSGI -> Unix socket -> uwsgi -> app response. Using SSL
+* nginx_static: Nginx static response
+* nginx_tcp_uwsgi: Nginx -> UWSGI -> TCP socket -> uwsgi -> app response
+* nginx_unix_uwsgi: Nginx -> UWSGI -> Unix socket -> uwsgi -> app response
+* uwsgi: uwsgi HTTP router -> app response
+* uwsgi_ssl: uwsgi HTTP router -> app response. Using SSL
+
+Apps/frameworks:
+
+* flask: Flask framework application
+* py: Pure wsgi application -- default
+
+Benchers:
+
+* h2load: h2load from nghttp2
+* weighttp: weighttp (no SSL support)
+
+
 
 Requirements
 ------------
@@ -46,4 +68,12 @@ Run benchmarks, dump and plot the results:
 
 .. code-block:: bash
 
+    $ narrow --help
+
+    $ narrow list_stands
+    $ narrow list_apps
+    $ narrow list_benchers
+
     $ narrow runlocal --plot
+    $ narrow --verbose runlocal --log --stand uwsgi --app flask --bencher weighttp --plot
+
