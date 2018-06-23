@@ -3,7 +3,10 @@ from ._base import register_app, App
 
 @register_app
 class Flask(App):
+    """
+    https://github.com/pallets/flask
 
+    """
     alias = 'flask'
     entrypoint = 'flask'
     description = 'Flask framework application'

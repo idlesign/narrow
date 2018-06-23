@@ -36,6 +36,7 @@ Stands:
 
 Apps/frameworks:
 
+* bottle: Bottle framework application
 * flask: Flask framework application
 * py: Pure wsgi application -- default
 
