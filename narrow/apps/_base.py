@@ -23,4 +23,4 @@ class App(Component):
         return ''
 
     def get_entrypoint_path(self):
-        return get_path_in_package('apps/entrypoints/%s.py' % self.alias)
+        return get_path_in_package('apps/entrypoints/%s_app.py' % self.alias)
