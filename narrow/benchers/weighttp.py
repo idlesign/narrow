@@ -42,7 +42,7 @@ class WeighttpBencher(Bencher):
 
         success_count = int(match_status.group(1))
 
-        if not success_count:
+        if num_requests != success_count:
             LOG.debug(out)
             raise BencherException(
                 'No successful responses.\n'
