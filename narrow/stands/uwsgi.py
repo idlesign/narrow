@@ -92,7 +92,7 @@ class UwsgiPy(Uwsgi):
 
     @property
     def socket(self):
-        return sockets.http(self.address)
+        return sockets.http(self.address, http11=True)
 
 
 @register_stand
