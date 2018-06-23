@@ -55,7 +55,7 @@ class Stand(Component):
         if child:
             contextman = child.setup
 
-        LOG.info('Working with `%s` stand ...', self.alias)
+        LOG.info('Working on `%s` stand with `%s` ...', self.alias, app.alias)
 
         with contextman(app):
 

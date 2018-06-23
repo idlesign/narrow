@@ -77,5 +77,5 @@ Run benchmarks, dump and plot the results:
     $ narrow list_benchers
 
     $ narrow runlocal --plot
-    $ narrow --verbose runlocal --log --stand uwsgi --app flask --bencher weighttp --plot
-
+    $ narrow --verbose runlocal --log --stand uwsgi --app flask --bencher weighttp
+    $ narrow stats_plot

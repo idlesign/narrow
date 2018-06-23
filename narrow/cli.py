@@ -11,7 +11,7 @@ LOG = get_logger(__name__)
 
 
 option_log = click.option('--log', help='Dump logs', is_flag=True)
-option_app = click.option('--app', help='Application (framework) to use')
+option_app = click.option('--app', help='Application (framework) to use', multiple=True)
 
 
 def plot_stats():
@@ -39,7 +39,7 @@ def runlocal(log, stand, bencher, plot, app):
     """
     Settings.LOG_WRITE = log
 
-    stats = gather_stats(bencher_alias=bencher, stand_alias=stand, app_alias=app)
+    stats = gather_stats(bencher_alias=bencher, stand_alias=stand, app_aliases=app)
 
     stats_dump(stats)
 
@@ -58,7 +58,7 @@ def stats_plot():
 @entry_point.command()
 @click.argument('stand')
 @option_log
-@option_app
+@click.option('--app', help='Application (framework) to use')
 def stand_up(stand, log, app):
     """Runs stand.
 

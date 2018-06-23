@@ -30,9 +30,10 @@ def stand_run(*, stand_alias, app_alias=None):
             sleep(1)
 
 
-def gather_stats(*, bencher_alias, stand_alias=None, app_alias=None):
+def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
 
     bootstrap()
+    app_aliases = app_aliases or list(APPS.keys())
 
     stats_items = {}
 
@@ -45,9 +46,6 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_alias=None):
         },
         'items': stats_items,
     }
-
-    app = get_component(APPS, app_alias)()
-    app_version = app.get_version()
 
     bencher = get_component(BENCHERS, bencher_alias)()
 
@@ -65,10 +63,17 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_alias=None):
             version = stand.get_version()
             versions.append(version)
 
-            with stand.setup(app):
-                results = bencher.run(stand)
-                stats_items[stand.get_alias_full()] = results
+            for app_alias in app_aliases:
+                LOG.info('')
+                app = get_component(APPS, app_alias)()
+                app_version = app.get_version()
 
-    versions.append(app_version)
+                with stand.setup(app):
+                    results = bencher.run(stand)
+                    stats_items[stand.get_alias_full()] = results
+
+                sleep(1)  # need to wait for process instead, but for now - cooldown
+
+                versions.append(app_version)
 
     return stats
