@@ -24,7 +24,13 @@ StatsItem = namedtuple('ResultItem', ['clients', 'requests', 'rps'])
 
 
 def stats_dump(stats, update=True):
-    stats['meta']['versions'] = sorted(set(stats['meta']['versions']))
+    versions = []
+
+    for version in stats['meta']['versions']:
+        if version not in versions:
+            versions.append(version)
+
+    stats['meta']['versions'] = versions
 
     base_stats = {}
 
