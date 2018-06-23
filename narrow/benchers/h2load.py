@@ -13,12 +13,12 @@ LOG = get_logger(__name__)
 @register_bencher
 class H2loadBencher(Bencher):
     """
-
     https://github.com/nghttp2/nghttp2/
 
     """
     alias = 'h2load'
     prc_name = 'h2load'
+    description = 'h2load from nghttp2'
 
     def get_version(self):
         return run_command('%s --version' % self.prc_name)

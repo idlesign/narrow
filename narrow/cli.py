@@ -69,6 +69,29 @@ def stand_up(stand, log, app):
     stand_run(stand_alias=stand, app_alias=app)
 
 
+def print_registry_items(registry):
+    for alias, item in sorted(registry.items(), key=lambda item: item[0]):
+        click.secho('%s: %s' % (alias, item.description))
+
+
+@entry_point.command()
+def list_stands():
+    """Printout registered stands."""
+    print_registry_items(STANDS)
+
+
+@entry_point.command()
+def list_benchers():
+    """Printout registered benchmark tools."""
+    print_registry_items(BENCHERS)
+
+
+@entry_point.command()
+def list_apps():
+    """Printout registered applications/frameworks."""
+    print_registry_items(APPS)
+
+
 def main():
 
     try:

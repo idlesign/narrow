@@ -33,4 +33,5 @@ class PurePy(App):
 
     alias = 'py'
     entrypoint = 'pure'
+    description = 'Pure wsgi application'
 

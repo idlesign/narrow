@@ -13,14 +13,12 @@ LOG = get_logger(__name__)
 @register_bencher
 class WeighttpBencher(Bencher):
     """
-
-    No HTTPS support.
     https://github.com/lighttpd/weighttp
 
     """
-
     alias = 'weighttp'
     prc_name = 'weighttp'
+    description = 'weighttp (no SSL support)'
 
     def get_version(self):
         versions = '%s' % run_command(

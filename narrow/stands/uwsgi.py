@@ -88,6 +88,7 @@ class UwsgiPy(Uwsgi):
 
     alias = 'uwsgi'
     address = '127.0.0.1:8002'
+    description = 'uwsgi HTTP router -> app response'
 
     @property
     def socket(self):
@@ -100,6 +101,7 @@ class UwsgiSslPy(Uwsgi):
     alias = 'uwsgi_ssl'
     address = '127.0.0.1:4443'
     protocol = 'https'
+    description = 'uwsgi HTTP router -> app response. Using SSL'
 
     @property
     def socket(self):

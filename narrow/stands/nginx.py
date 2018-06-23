@@ -107,6 +107,7 @@ class NginxStatic(NginxBase):
 
     uses_app = False
     alias = 'nginx_static'
+    description = 'Nginx static response'
 
 
 @register_stand
@@ -114,6 +115,7 @@ class NginxSslStatic(NginxBase):
 
     uses_app = False
     alias = 'nginx_ssl_static'
+    description = 'Nginx static response using SSL'
 
 
 class NginxWithUwsgiBackend:
@@ -135,33 +137,35 @@ class NginxWithUwsgiBackend:
 
         commands = 'uwsgi_pass %s;\n' % address
         commands += uwsgi.params_stub
-        
+
         return commands
 
 
 @register_stand
-class NginxSslUnixUwsgiPy(NginxWithUwsgiBackend, NginxSslBase):
+class NginxSslUnixUwsgi(NginxWithUwsgiBackend, NginxSslBase):
 
     unix_socket = True
-
     alias = 'nginx_ssl_unix_uwsgi'
+    description = 'Nginx -> UWSGI -> Unix socket -> uwsgi -> app response. Using SSL'
 
 
 @register_stand
-class NginxSslTcpUwsgiPy(NginxWithUwsgiBackend, NginxSslBase):
+class NginxSslTcpUwsgi(NginxWithUwsgiBackend, NginxSslBase):
 
     alias = 'nginx_ssl_tcp_uwsgi'
+    description = 'Nginx -> UWSGI -> TCP socket -> uwsgi -> app response. Using SSL'
 
 
 @register_stand
-class NginxUnixUwsgiPy(NginxWithUwsgiBackend, NginxBase):
+class NginxUnixUwsgi(NginxWithUwsgiBackend, NginxBase):
 
     unix_socket = True
-
     alias = 'nginx_unix_uwsgi'
+    description = 'Nginx -> UWSGI -> Unix socket -> uwsgi -> app response'
 
 
 @register_stand
-class NginxTcpUwsgiPy(NginxWithUwsgiBackend, NginxBase):
+class NginxTcpUwsgi(NginxWithUwsgiBackend, NginxBase):
 
     alias = 'nginx_tcp_uwsgi'
+    description = 'Nginx -> UWSGI -> TCP socket -> uwsgi -> app response'
