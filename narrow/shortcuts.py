@@ -1,3 +1,4 @@
+from datetime import datetime
 from time import sleep
 
 from ._base import PythonComponent, OSComponent
@@ -41,6 +42,7 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
 
     stats = {
         'meta': {
+            'date': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
             'versions': versions,
             'settings': {},  # e.g. connections_max
         },

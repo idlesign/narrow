@@ -55,13 +55,14 @@ def plot(stats):
         line = new_line(realm_title, realm_results)
         scatters.append(line)
 
+    date = stats_meta['date']
     versions = stats_meta['versions']
 
     result = plot_method({
         'data': scatters,
         'layout': go.Layout(
 
-            title='Throughput. Versions: %s.' % (' | '.join(versions)),
+            title='Throughput.<br>Gathered on %s UTC.<br>%s.' % (date, ' | '.join(versions)),
             xaxis={
                 'title': 'Clients count',
             },
