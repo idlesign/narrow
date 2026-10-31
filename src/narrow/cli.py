@@ -8,6 +8,7 @@ from click.core import ParameterSource
 
 from . import APPS, BENCHERS, STANDS, VERSION
 from .reports.artifacts import stats_load
+from .reports.compare import RunSelection, compare_runs
 from .configuration import LoadSpec, Settings
 from .processes.limits import ProcessLimits
 from .exceptions import NarrowException
@@ -70,6 +71,18 @@ def entry_point(verbose: bool) -> None:
 @click.option("--attempt-timeout", type=float, default=30.0, show_default=True)
 @click.option("--ready-timeout", type=float, default=5.0, show_default=True)
 @click.option("--budget", type=float, default=120.0, help="Execution deadline in seconds, including reserved cleanup.")
+@click.option(
+    "--workload-file", multiple=True,
+    help="Independent workload identity NAME=PATH; repeatable. Hashes bytes before execution without copying contents.",
+)
+@click.option(
+    "--target-settings", default="{}",
+    help="Nonsecret target settings as a JSON object; declaration for comparison, not a server configuration command.",
+)
+@click.option(
+    "--budget-file", type=click.Path(path_type=Path, dir_okay=False),
+    help="Share one nonrenewable time budget between fresh runs; defaults to OUTPUT/budget.json.",
+)
 @click.option("--keepalive/--no-keepalive", default=True, show_default=True)
 @click.option("--drain/--no-drain", default=True, show_default=True)
 @click.option("--output", type=click.Path(path_type=Path), help="Required with --execute; a new private result directory.")
@@ -81,12 +94,13 @@ def run(
     context: click.Context, config: Path | None, stand: tuple[str, ...], app: tuple[str, ...], bencher: str, clients: tuple[int, ...],
     requests: int | None, duration: float | None, qps: float | None, repeats: int,
     warmup_requests: int, worker_threads: int, request_timeout: float, connect_timeout: float,
-    attempt_timeout: float, ready_timeout: float, budget: float, keepalive: bool, drain: bool,
+    attempt_timeout: float, ready_timeout: float, budget: float, budget_file: Path | None, keepalive: bool, drain: bool,
     output: Path | None, log: bool, create_plot: bool, url: str | None, name: str, cwd: Path | None,
     env: tuple[str, ...], ready_path: str, ready_status: int, method: str, path: str | None,
     header: tuple[str, ...], body: Path | None, ca_file: Path | None, expected_status: int | None,
     expected_bytes: int | None, dry_run: bool, execute: bool, command: tuple[str, ...],
     generator_cpu: tuple[int, ...], generator_address_space_bytes: int | None,
+    workload_file: tuple[str, ...], target_settings: str,
 ) -> None:
     """Run only explicitly requested workloads; no benchmark starts with defaults alone."""
 
@@ -127,6 +141,25 @@ def run(
                 raise ValueError("--name applies only to --url")
 
             headers = []
+            files = {}
+
+            for entry in workload_file:
+                artifact, separator, filename = entry.partition("=")
+
+                if not artifact or not separator or not filename or artifact in files:
+                    raise ValueError("Workload files must use distinct NAME=PATH entries")
+
+                files[artifact] = Path(filename)
+
+            try:
+
+                if len(target_settings) > 65536:
+                    raise ValueError("Target settings exceed their size limit")
+
+                settings = json.loads(target_settings)
+
+            except (json.JSONDecodeError, RecursionError) as error:
+                raise ValueError("Invalid target settings JSON") from error
 
             for value in header:
                 key, separator, content = value.partition(":")
@@ -169,6 +202,8 @@ def run(
                 bencher=bencher, loads=loads, repeats=repeats,
                 generator_limits=ProcessLimits(cpus=generator_cpu or None, address_space_bytes=generator_address_space_bytes),
                 warmup_requests=warmup_requests, attempt_timeout=attempt_timeout, ready_timeout=ready_timeout, budget=budget,
+                budget_file=budget_file,
+                workload_files=files, target_settings=settings,
             )
 
         if log and not options.stands:
@@ -202,6 +237,30 @@ def stats_plot(source: Path, output: Path) -> None:
 
     try:
         click.echo(plot(stats_load(source), filename=output))
+
+    except (ValueError, OSError, NarrowException) as error:
+        raise click.ClickException(f"{error}") from error
+
+
+@entry_point.command()
+@click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--factor", type=click.Choice(("revision", "platform")), required=True)
+@click.option("--stand", help="Select this saved target in every source; required if selection is ambiguous.")
+@click.option("--app", help="Select this saved application in every source.")
+@click.option("--subject", help="Select this subject fingerprint in every source; individual selections are available in the API.")
+@click.option("--output", type=click.Path(path_type=Path, dir_okay=False), help="Write a new self-contained HTML comparison.")
+def compare(
+    sources: tuple[Path, ...], factor: str, stand: str | None, app: str | None, subject: str | None, output: Path | None,
+) -> None:
+    """Compare saved checkpoints only; the first source is the baseline. Print JSON rows and raw issues."""
+
+    try:
+        report = compare_runs([RunSelection(source, stand=stand, app=app, subject=subject) for source in sources], factor=factor)
+
+        if output is not None:
+            report.write_html(output)
+
+        click.echo(json.dumps(report.serialize(), allow_nan=False, ensure_ascii=True))
 
     except (ValueError, OSError, NarrowException) as error:
         raise click.ClickException(f"{error}") from error

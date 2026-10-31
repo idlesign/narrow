@@ -72,6 +72,8 @@ def test_dry_run_from_foreign_directory_has_no_external_effects(tmp_path: Path, 
         "run", "--url", "https://example.test/original", "--method", "POST", "--path", "/upload?key=PRIVATE",
         "--body", "not-opened.bin", "--header", "Authorization: Bearer SECRET", "--requests", "3", "--dry-run",
         "--generator-cpu", "3", "--generator-cpu", "2", "--generator-address-space-bytes", "1073741824",
+        "--budget-file", "not-opened-budget.json",
+        "--workload-file", "scenario=not-opened.py", "--target-settings", '{"workers":2}',
     ])
 
     assert result.exit_code == 0, result.output
@@ -81,6 +83,9 @@ def test_dry_run_from_foreign_directory_has_no_external_effects(tmp_path: Path, 
     assert not data["runtime_tools_verified"] and not data["input_files_verified"]
     assert data["cases"][0]["request_url"].startswith("https://example.test/upload?")
     assert data["options"]["request"]["method"] == "POST"
+    assert data["options"]["budget_file"] == "not-opened-budget.json"
+    assert data["options"]["workload_files"] == {"scenario": "not-opened.py"}
+    assert data["options"]["target_settings"] == {"workers": 2}
     assert data["options"]["generator_limits"] == {"cpus": [2, 3], "address_space_bytes": 1024**3, "file_size_bytes": None}
     assert "PRIVATE" not in result.stdout and "SECRET" not in result.stdout
     assert result.stderr == ""
@@ -123,12 +128,14 @@ def test_cli_execute_and_plot_uses_the_same_runner(
     result = CliRunner().invoke(cli.entry_point, [
         "run", "--url", "https://example.test/", "--method", "HEAD", "--expected-status", "200", "--expected-bytes", "0",
         "--requests", "1", "--execute", "--output", f"{tmp_path / "run"}", "--plot",
+        "--budget-file", f"{tmp_path / "shared-budget.json"}",
     ])
 
     assert result.exit_code == exit_code, result.output
     options, output = gather.call_args.args
     assert options.request.method == "HEAD" and options.request.expected_response_bytes == 0
     assert options.targets[0].url == "https://example.test/"
+    assert options.budget_file == tmp_path / "shared-budget.json"
     assert output == tmp_path / "run"
     create_plot.assert_called_once_with(stats, filename=output / "report.html")
 
@@ -193,6 +200,7 @@ def test_config_cannot_opt_in_to_execution(tmp_path: Path, monkeypatch: pytest.M
     ["--requests", "1"], ["--clients", "1"], ["--method", "GET"], ["--keepalive"], ["--no-keepalive"],
     ["--url", "http://example.test/"], ["--stand", "nginx_static"], ["--app", "py"], ["--name", "custom"],
     ["--header", "Authorization: PRIVATE"], ["--env", "TOKEN=PRIVATE"], ["--", "server", "--flag"],
+    ["--budget-file", "not-opened-budget.json"],
 ])
 def test_config_rejects_explicit_cli_run_settings_before_reading(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, extra: list[str],

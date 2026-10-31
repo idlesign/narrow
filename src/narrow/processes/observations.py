@@ -1,11 +1,31 @@
 """Linux CPU and sampled resource peaks, not kernel high-water or tree totals."""
 
+import ctypes
+import math
 import os
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Self
 
 from .tree import read_identity
+
+
+def read_cpu_seconds(pid: int) -> float:
+    """Read coarse user + system process CPU, excluding its waited children."""
+
+    if type(pid) is not int or pid <= 0:
+        raise ValueError("CPU observation requires a positive process ID")
+
+    fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+    counters = (int(fields[11]), int(fields[12]))
+    ticks = os.sysconf("SC_CLK_TCK")
+
+    if min(counters) < 0 or ticks <= 0:
+        raise ValueError("Invalid process CPU counter or tick resolution")
+
+    return sum(counters) / ticks
+
 
 def observe_processes(pids: Mapping[str, int]) -> dict:
     """A disappearing process/thread is reported, not silently assigned zero CPU."""
@@ -19,8 +39,7 @@ def observe_processes(pids: Mapping[str, int]) -> dict:
             if identity is None:
                 raise ProcessLookupError("process identity not observed live")
 
-            fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
-            cpu = (int(fields[11]) + int(fields[12])) / ticks
+            cpu = read_cpu_seconds(pid)
             status = Path(f"/proc/{pid}/status").read_text().splitlines()
             resources = {
                 "rss_kib": int(next(line.split()[1] for line in status if line.startswith("VmRSS:"))),
@@ -51,7 +70,7 @@ def observe_processes(pids: Mapping[str, int]) -> dict:
                 "threads": threads,
             }
 
-        except (FileNotFoundError, ProcessLookupError, StopIteration, PermissionError) as error:
+        except (OSError, StopIteration, ValueError, IndexError) as error:
             result["unavailable"].append(role)
             result.setdefault("unavailable_reasons", {})[role] = f"{type(error).__name__}: {error}"
     return result
@@ -207,4 +226,177 @@ def validate_affinity(
 
     if any(not thread["affinity"] or not set(thread["affinity"]) <= allowed for thread in current["threads"].values()):
         raise ValueError("native process thread escaped its allowed CPU mask")
+
+
+def read_clock_id(pid: int) -> int:
+    """Ask libc for the process-wide CPU clock; errors are returned, not errno."""
+
+    if type(pid) is not int or not 0 < pid <= 0x7FFFFFFF:
+        raise ValueError("CPU clock requires a positive process ID")
+
+    function = ctypes.CDLL(None).clock_getcpuclockid
+    function.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_int))
+    function.restype = ctypes.c_int
+    clock_id = ctypes.c_int()
+    error = function(pid, ctypes.byref(clock_id))
+
+    if error:
+        raise OSError(error, os.strerror(error), f"process {pid}")
+
+    return clock_id.value
+
+
+class ProcessCpuClock:
+    """Bind explicitly to one live process identity and its user + system CPU.
+
+    The clock covers that process's threads, not children or a process tree.
+    The caller chooses a window by subtracting observations of this same clock.
+    """
+
+    def __init__(self, pid: int) -> None:
+
+        if type(pid) is not int or not 0 < pid <= 0x7FFFFFFF:
+            raise ValueError("CPU clock requires a positive process ID")
+
+        self.pid = pid
+        self.identity: dict[str, int] | None = None
+        self.clock_id: int | None = None
+        self.resolution: float | None = None
+
+    def start(self) -> Self:
+        """Observe identity and validate the kernel clock without changing the process."""
+
+        if self.identity is not None:
+            raise RuntimeError("CPU clock has already been started")
+
+        identity = read_identity(self.pid)
+
+        if identity is None:
+            raise ProcessLookupError(f"CPU clock process {self.pid} is not alive")
+
+        clock_id = read_clock_id(self.pid)
+        resolution = time.clock_getres(clock_id)
+
+        if not math.isfinite(resolution) or resolution <= 0:
+            raise ValueError("Process CPU clock has invalid resolution")
+
+        self.identity, self.clock_id, self.resolution = identity, clock_id, resolution
+
+        try:
+            self.read_ns()
+
+        except BaseException:
+            self.identity = self.clock_id = self.resolution = None
+            raise
+
+        return self
+
+    def read_ns(self) -> int:
+        """Read nanoseconds, not nanosecond accuracy; reject exit or PID reuse."""
+
+        if self.identity is None or self.clock_id is None:
+            raise RuntimeError("CPU clock has not been started")
+
+        if read_identity(self.pid) != self.identity:
+            raise ProcessLookupError(f"CPU clock process {self.pid} exited or changed identity")
+
+        value = time.clock_gettime_ns(self.clock_id)
+
+        if read_identity(self.pid) != self.identity:
+            raise ProcessLookupError(f"CPU clock process {self.pid} exited or changed identity")
+
+        if type(value) is not int or value < 0:
+            raise ValueError("Process CPU clock returned an invalid value")
+
+        return value
+
+    def describe(self) -> dict:
+        """Describe the bound clock and its reported resolution, never its accuracy."""
+
+        if self.identity is None:
+            raise RuntimeError("CPU clock has not been started")
+
+        return {
+            **self.identity, "clock_id": self.clock_id,
+            "source": "clock_getcpuclockid + clock_gettime_ns; process-wide user + system",
+            "reported_resolution_seconds": self.resolution, "resolution_is_not_accuracy": True,
+        }
+
+    def read_observation(self) -> dict:
+        """Cross-check coarse /proc CPU against the clock, never as a fallback."""
+
+        if self.identity is None:
+            raise RuntimeError("CPU clock has not been started")
+
+        began = time.monotonic()
+
+        if read_identity(self.pid) != self.identity:
+            raise ProcessLookupError(f"CPU clock process {self.pid} exited or changed identity")
+
+        proc = read_cpu_seconds(self.pid)
+        clock = self.read_ns()
+        ended = time.monotonic()
+
+        if type(proc) not in (int, float) or not math.isfinite(proc) or proc < 0:
+            raise ValueError("Invalid coarse process CPU counter")
+
+        ticks = os.sysconf("SC_CLK_TCK")
+
+        if ticks <= 0:
+            raise ValueError("Invalid process CPU tick resolution")
+
+        return {
+            "identity": self.identity.copy(), "clock_ns": clock, "proc_cpu_seconds": proc,
+            "proc_resolution_seconds": 1 / ticks, "read_monotonic": [began, ended],
+        }
+
+
+def compare_cpu_observations(before: dict, after: dict) -> dict:
+    """Compare two interfaces to kernel accounting, retaining clock disagreement."""
+
+    if type(before) is not dict or type(after) is not dict:
+        raise ValueError("Invalid CPU cross-check observation")
+
+    for observation in (before, after):
+        identity = observation.get("identity")
+        interval = observation.get("read_monotonic")
+
+        if (
+            type(identity) is not dict or type(identity.get("pid")) is not int or identity["pid"] <= 0
+            or type(identity.get("start_ticks")) is not int or identity["start_ticks"] < 0
+            or type(interval) not in (list, tuple) or len(interval) != 2
+        ):
+            raise ValueError("Invalid CPU cross-check identity or read interval")
+
+        began, ended = interval
+        proc, resolution, clock_ns = (
+            observation.get("proc_cpu_seconds"), observation.get("proc_resolution_seconds"), observation.get("clock_ns"),
+        )
+        values = (began, ended, proc, resolution)
+
+        if (
+            any(type(value) not in (int, float) or not math.isfinite(value) or value < 0 for value in values)
+            or ended < began or resolution <= 0 or type(clock_ns) is not int or clock_ns < 0
+        ):
+            raise ValueError("Invalid CPU cross-check observation")
+
+    if before["identity"] != after["identity"]:
+        raise ValueError("CPU observation process identity changed")
+
+    if before["read_monotonic"][1] > after["read_monotonic"][0]:
+        raise ValueError("CPU cross-check read intervals overlap or decreased")
+
+    clock = (after["clock_ns"] - before["clock_ns"]) / 1e9
+    proc = after["proc_cpu_seconds"] - before["proc_cpu_seconds"]
+
+    if clock < 0 or proc < 0:
+        raise ValueError("CPU cross-check counter decreased")
+
+    skew = sum(observation["read_monotonic"][1] - observation["read_monotonic"][0] for observation in (before, after))
+    allowance = 2 * max(before["proc_resolution_seconds"], after["proc_resolution_seconds"]) + skew
+    return {
+        "clock_seconds": clock, "proc_seconds": proc, "difference_seconds": clock - proc,
+        "allowance_seconds": allowance, "agrees_within_tick_and_read_skew": abs(clock - proc) <= allowance,
+        "scope": "two interfaces to kernel CPU accounting, not independent hardware measurements",
+    }
 

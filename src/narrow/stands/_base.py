@@ -95,7 +95,7 @@ class Stand(Component):
         self.prc.start()
 
     @contextmanager
-    def setup(self, app: App | None = None, *, timeout: float = 5.0) -> Iterator["Stand"]:
+    def setup(self, app: App | None = None, *, timeout: float = 5.0, ca_file: Path | None = None) -> Iterator["Stand"]:
         """Prepare, start and verify the stand; clean up even when bootstrap fails."""
 
         if self.resources.path is not None:
@@ -117,11 +117,11 @@ class Stand(Component):
             if not self.unix:
                 check_available(self.address)
 
-            with self.child.setup(self.app, timeout=timeout) if self.child else nullcontext():
+            with self.child.setup(self.app, timeout=timeout, ca_file=ca_file) if self.child else nullcontext():
 
                 try:
                     self.bootstrap()
-                    wait_ready(self, timeout=timeout)
+                    wait_ready(self, timeout=timeout, ca_file=ca_file)
                     yield self
 
                 finally:

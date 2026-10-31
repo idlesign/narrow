@@ -41,15 +41,13 @@
     <div class="summary">
       <span><strong>$measured</strong> measured attempts</span>
       <span><strong>$warmups</strong> warmups, not plotted</span>
-      <span><strong>$series</strong> request / load series</span>
+      <span><strong>$series</strong> $series_label</span>
       <span><strong>$issues</strong> attempts with issues</span>
     </div>
   </header>
-  <section class="chart" aria-label="Throughput and latency charts">
+  <section class="chart" aria-label="$chart_label">
     $chart
-    <p class="help">Hover for repeat counts and outcomes. Click a legend item to toggle a server series
-      (or a metric in a single-series report).
-      Use the camera button to export both panels as PNG, without a separate plotting backend.</p>
+    <p class="help">$chart_help</p>
   </section>
   <section>
     <h2>Interpretation</h2>
@@ -60,7 +58,7 @@
     $conditions
   </section>
   <section>
-    <h2>Target lifecycle evidence</h2>
+    <h2>$evidence_title</h2>
     $targets
   </section>
   <section>

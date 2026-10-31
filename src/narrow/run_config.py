@@ -17,7 +17,10 @@ LOAD_FIELDS = {
     "requests": "requests", "duration": "duration", "qps": "qps", "worker_threads": "worker_threads",
     "request_timeout": "timeout", "connect_timeout": "connect_timeout", "keepalive": "keepalive", "drain": "drain",
 }
-RUN_FIELDS = {"stands", "apps", "bencher", "repeats", "warmup_requests", "attempt_timeout", "ready_timeout", "budget"}
+RUN_FIELDS = {
+    "stands", "apps", "bencher", "repeats", "warmup_requests", "attempt_timeout", "ready_timeout", "budget", "budget_file",
+    "workload_files", "target_settings",
+}
 REQUEST_FIELDS = {"method", "path", "headers", "body", "ca_file", "expected_status", "expected_response_bytes", "max_body_bytes"}
 COMMAND_FIELDS = {"argv", "cwd", "env", "ready_path", "ready_status"}
 
@@ -113,6 +116,19 @@ def read_run_config(path: Path) -> RunOptions:
     request = read_table(data.get("request", {}), name="request", fields=REQUEST_FIELDS)
     generator = read_table(data.get("generator", {}), name="generator", fields={"cpus", "address_space_bytes", "file_size_bytes"})
     limits = ProcessLimits(**generator)
+
+    if "budget_file" in run:
+        run["budget_file"] = read_path(run["budget_file"], base=source.parent, name="run.budget_file")
+
+    if "workload_files" in run:
+        files = run["workload_files"]
+
+        if not isinstance(files, dict):
+            raise ValueError("run.workload_files must be a table of artifact names and paths")
+
+        run["workload_files"] = {
+            name: read_path(path, base=source.parent, name="run.workload_files") for name, path in files.items()
+        }
 
     for name in ("body", "ca_file"):
 

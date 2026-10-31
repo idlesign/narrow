@@ -110,13 +110,13 @@ def wait_http_ready(
 
     return _wait_for_probe(probe, timeout=timeout, attempts=attempts, check_running=check_running, title="HTTP endpoint")
 
-def wait_ready(stand: "Stand", *, timeout: float, attempts: int = 8) -> None:
+def wait_ready(stand: "Stand", *, timeout: float, attempts: int = 8, ca_file: Path | None = None) -> None:
     """Check built-in HTTP response identity or the internal uWSGI socket."""
 
     if stand.protocol != "uwsgi":
         wait_http_ready(
             f"{stand.protocol}://{stand.address}/", timeout=timeout, attempts=attempts,
-            ca_file=get_ssl_ca_path() if stand.protocol == "https" else None,
+            ca_file=(ca_file or Path(get_ssl_ca_path())) if stand.protocol == "https" else None,
             expected_body=stand.app.response_body if stand.uses_app else b"Hello there!", check_running=stand.check_running,
         )
         return

@@ -72,15 +72,17 @@ def _summarize_attempts(attempts: list[dict], repeats: int, clean_sessions: set[
     return result
 
 def read_results(path: Path, *, stand: str, app: str | None = None, subject: str | None = None) -> RunMetrics:
-    """Read one saved stand/app; incomplete repeats yield NaN, never a partial median.
+    """Read one saved stand/app; incomplete repeats yield NaN, never a partial median."""
+    return summarize_results(stats_load(path), stand=stand, app=app, subject=subject)
+
+def summarize_results(data: dict, *, stand: str, app: str | None = None, subject: str | None = None) -> RunMetrics:
+    """Validate and summarize one in-memory checkpoint without reading any input files.
 
     Latency tracks are medians of per-attempt quantiles, not pooled percentiles.
     Their population and QPS correction remain those of the saved experiment.
     This reader does not establish comparability or assign a Git revision.
     Select a subject fingerprint when the same stand/app contains different code.
     """
-    data = stats_load(path)
-
     try:
 
         if data["status"] not in ("complete", "failed", "cancelled"):

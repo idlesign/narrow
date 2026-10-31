@@ -40,7 +40,7 @@ def test_granian_serves_selected_wsgi_app(
     assert metadata["servers"]["granian"]["version"] == "granian test"
     assert metadata["apps"][app_alias]["entrypoint_sha256"]
     granian.run_command.assert_called_once_with([f"{tmp_path / "fake-server"}", "--version"])
-    run_environment.ready.assert_called_once_with(target.stand, timeout=1)
+    run_environment.ready.assert_called_once_with(target.stand, timeout=1, ca_file=None)
     run_environment.handles[0].stop.assert_called_once()
     assert evidence["files"]["stdout.bin"] == b"server out"
     assert target.stand.prc is target.stand.app is target.stand.resources.path is None

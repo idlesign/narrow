@@ -62,6 +62,22 @@ def test_command_defaults_to_config_directory_and_preserves_absolute_inputs(tmp_
     assert options.request.body == body
     assert not body.exists()
 
+@pytest.mark.parametrize("path", ["shared-budget.json", "/explicit/shared-budget.json"])
+def test_budget_file_is_anchored_to_config_without_opening_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str,
+) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(f"[run]\nrequests = 1\nbudget_file = {json.dumps(path)}\n{URL_TARGET}")
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    monkeypatch.chdir(foreign)
+
+    options = read_run_config(source)
+
+    assert options.budget_file == source.parent / path
+    assert Runner(options).plan()["options"]["budget_file"] == f"{source.parent / path}"
+    assert set(tmp_path.iterdir()) == {source, foreign} and list(foreign.iterdir()) == []
+
 def test_builtin_selection_uses_existing_runner(tmp_path: Path) -> None:
     source = tmp_path / "run.toml"
     source.write_text(
@@ -75,6 +91,22 @@ def test_builtin_selection_uses_existing_runner(tmp_path: Path) -> None:
     assert options.stands == ("nginx_static", "uwsgi", "granian", "granian_ssl") and options.apps == ("py",)
     assert [case["name"] for case in plan["cases"]] == ["nginx_static", "uwsgi", "granian", "granian_ssl"]
     assert options.targets == ()
+
+
+def test_workload_files_and_declared_settings_are_loaded_without_reading_inputs(tmp_path: Path) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(
+        "[run]\nrequests = 2\nworkload_files = {scenario = \"absent/scenario.py\"}\n"
+        "target_settings = {workers = 2, threads = 1, response = {bytes = 12}}\n" + URL_TARGET
+    )
+
+    options = read_run_config(source)
+    plan = Runner(options).plan()
+
+    assert options.workload_files == {"scenario": tmp_path / "absent/scenario.py"}
+    assert options.target_settings == {"workers": 2, "threads": 1, "response": {"bytes": 12}}
+    assert plan["options"]["workload_files"] == {"scenario": f"{tmp_path / "absent/scenario.py"}"}
+    assert list(tmp_path.iterdir()) == [source]
 
 def test_duration_and_requested_qps_use_load_spec(tmp_path: Path) -> None:
     source = tmp_path / "run.toml"
@@ -127,6 +159,11 @@ def test_reject_invalid_subject_config(tmp_path: Path, subject: str, message: st
     ("requests = 1\nduration = 0.1", "exactly one of requests or duration"),
     ("requests = 1\nrepeats = true", "Invalid repeats"),
     ("requests = 1\nbudget = 1", "reserve time"),
+    ("requests = 1\nbudget_file = false", "run.budget_file"),
+    ("requests = 1\nbudget_file = \"\"", "run.budget_file"),
+    ("requests = 1\nworkload_files = []", "run.workload_files"),
+    ("requests = 1\nworkload_files = {scenario = false}", "run.workload_files"),
+    ("requests = 1\ntarget_settings = false", "target_settings"),
 ])
 def test_reject_invalid_run_settings(tmp_path: Path, run: str, message: str) -> None:
     source = tmp_path / "run.toml"

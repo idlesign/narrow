@@ -73,7 +73,7 @@ class StandTarget:
     def setup(self, *, timeout: float, ca_file: Path | None = None) -> Iterator["StandTarget"]:
         """Delegate built-in application readiness and owned cleanup to the stand."""
 
-        with self.stand.setup(self.app, timeout=timeout):
+        with self.stand.setup(self.app, timeout=timeout, ca_file=ca_file):
             yield self
 
     def check_running(self) -> None:

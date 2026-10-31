@@ -14,6 +14,7 @@ from ..configuration import LoadSpec
 from ..exceptions import BencherException, NarrowException
 from ..processes import ProcessHandle, run_command
 from ..processes.limits import ProcessLimits
+from ..measurement.conditions import describe_http_endpoint
 from ..requests import RequestSpec, snapshot_request, redact_url
 from ..reports.results import SampleResult
 
@@ -122,7 +123,7 @@ class Bencher(Component):
             prepared, metadata = snapshot_request(request, Path(directory))
             sample = self._run_once(url, load, timeout=timeout, request=prepared, limits=limits)
 
-        metadata.update(url=redact_url(url), url_sha256=hashlib.sha256(url.encode()).hexdigest())
+        metadata.update(url=redact_url(url), url_sha256=hashlib.sha256(url.encode()).hexdigest(), **describe_http_endpoint(url))
         sample.request = metadata
         stdout, stderr = sample.raw_stdout, sample.raw_stderr
         sample.raw_stdout = request.redact(stdout, url)

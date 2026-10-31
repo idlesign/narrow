@@ -70,6 +70,20 @@ def test_wrong_response_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     assert connection.request.call_count == 2
 
 
+def test_builtin_readiness_uses_frozen_ca_without_reopening_its_source(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe = Mock()
+    source = Mock(side_effect=AssertionError("Reopened CA outside the frozen request"))
+    monkeypatch.setattr(readiness, "wait_http_ready", probe)
+    monkeypatch.setattr(readiness, "get_ssl_ca_path", source)
+    stand = SimpleNamespace(protocol="https", address="127.0.0.1:8000", uses_app=False, check_running=Mock())
+    frozen = Path("inputs/frozen-ca.pem")
+
+    readiness.wait_ready(stand, timeout=1, ca_file=frozen)
+
+    assert probe.call_args.kwargs["ca_file"] is frozen
+    source.assert_not_called()
+
+
 @pytest.mark.parametrize("occupied", (False, True))
 def test_port_check_allows_reuse_but_rejects_listeners(occupied: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     probe = Mock()
