@@ -283,7 +283,7 @@ class StandTarget:
 
         while current is not None:
             name = current.prc_name
-            binary = Path(shutil.which(name)).resolve()
+            binary = Path(current.get_executable()).resolve()
             servers[name] = {
                 "path": f"{binary}", "version": current.get_version(), "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
             }

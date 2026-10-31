@@ -46,11 +46,17 @@ class Stand(Component):
         """Name static stands without an irrelevant application suffix."""
         return f"{self.alias}_{self.app.alias}" if self.uses_app and self.app else self.alias
 
+    def get_executable(self) -> str:
+        """Resolve the selected server executable without starting it."""
+
+        if executable := shutil.which(self.prc_name):
+            return executable
+
+        raise NarrowException(f"Server {self.prc_name} is not installed")
+
     def check_tools(self) -> None:
         """Check the selected topology only; unrelated servers remain optional."""
-
-        if not shutil.which(self.prc_name):
-            raise NarrowException(f"Server {self.prc_name} is not installed")
+        self.get_executable()
 
         if self.protocol == "uwsgi" or self.alias in ("uwsgi", "uwsgi_ssl"):
 

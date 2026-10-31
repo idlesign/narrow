@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+granian = ["granian>=2.8,<3"]
 uwsgi = ["uwsgi", "uwsgiconf>=0.14.2"]
 
 [project.urls]

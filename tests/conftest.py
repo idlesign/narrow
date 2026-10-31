@@ -13,7 +13,7 @@ from narrow import targets
 from narrow.processes import CommandResult
 from narrow.targets import CommandTarget
 from narrow.results import SampleResult
-from narrow.stands import _base, nginx, uwsgi
+from narrow.stands import _base, granian, nginx, uwsgi
 from narrow.stands._base import Stand
 
 
@@ -64,6 +64,7 @@ def run_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNa
     ready = Mock()
     monkeypatch.setattr(_base, "wait_ready", ready)
     monkeypatch.setattr(nginx, "run_command", Mock(return_value="nginx test"))
+    monkeypatch.setattr(granian, "run_command", Mock(return_value="granian test"))
     monkeypatch.setattr(uwsgi, "run_command", Mock(return_value="uwsgi test"))
     bencher = OhaBencher()
     monkeypatch.setattr(bencher, "prepare", Mock(return_value={"version": "oha 1.16.0", "sha256": "test"}))

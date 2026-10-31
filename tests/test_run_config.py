@@ -61,13 +61,16 @@ def test_command_defaults_to_config_directory_and_preserves_absolute_inputs(tmp_
 
 def test_builtin_selection_uses_existing_runner(tmp_path: Path) -> None:
     source = tmp_path / "run.toml"
-    source.write_text("[run]\nstands = [\"nginx_static\", \"uwsgi\"]\napps = [\"py\"]\nrequests = 2\n")
+    source.write_text(
+        "[run]\nstands = [\"nginx_static\", \"uwsgi\", \"granian\", \"granian_ssl\"]\n"
+        "apps = [\"py\"]\nrequests = 2\n"
+    )
 
     options = read_run_config(source)
     plan = Runner(options).plan()
 
-    assert options.stands == ("nginx_static", "uwsgi") and options.apps == ("py",)
-    assert [case["name"] for case in plan["cases"]] == ["nginx_static", "uwsgi"]
+    assert options.stands == ("nginx_static", "uwsgi", "granian", "granian_ssl") and options.apps == ("py",)
+    assert [case["name"] for case in plan["cases"]] == ["nginx_static", "uwsgi", "granian", "granian_ssl"]
     assert options.targets == ()
 
 def test_duration_and_requested_qps_use_load_spec(tmp_path: Path) -> None:

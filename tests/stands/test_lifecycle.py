@@ -102,6 +102,6 @@ def test_registry_and_constructors_do_not_allocate(monkeypatch: pytest.MonkeyPat
 
     stands = [stand_class() for stand_class in STANDS.values()]
 
-    assert len(stands) == 8
+    assert len(stands) == 10
     prepare.assert_not_called()
     assert all(stand.resources.path is None for stand in stands)

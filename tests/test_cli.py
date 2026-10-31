@@ -20,6 +20,7 @@ from narrow.plotting import RunReport
         pytest.param(["--help"], "run", id="help"),
         pytest.param(["list-apps"], "py: Pure wsgi application", id="apps"),
         pytest.param(["list-stands"], "uwsgi: uWSGI direct HTTP socket", id="stands"),
+        pytest.param(["list-stands"], "granian: Granian HTTP/1.1", id="granian"),
         pytest.param(["list-benchers"], "h2load: h2load from nghttp2", id="benchers"),
     ],
 )
@@ -276,3 +277,33 @@ env = { TOKEN = "PRIVATE", PYTHONDONTWRITEBYTECODE = "1", PYTHONNOUSERSITE = "1"
     figure = RunReport(saved).create_figure()
     assert [trace.name for trace in figure.data if trace.showlegend] == ["S1 · external", "S2 · owned"]
     command_environment.server.stop.assert_called_once()
+
+
+def test_granian_config_shares_runner_checkpoint_asv_and_report(
+    tmp_path: Path, run_environment: SimpleNamespace,
+) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(
+        "[run]\nstands = [\"granian\", \"granian_ssl\"]\napps = [\"py\"]\nclients = [1, 4]\nrequests = 2\n"
+    )
+    output = tmp_path / "run"
+
+    result = CliRunner().invoke(cli.entry_point, [
+        "run", "--cfg", f"{source}", "--execute", "--output", f"{output}", "--plot",
+    ])
+
+    assert result.exit_code == 0, result.output
+    saved = stats_load(output)
+    assert saved["status"] == "complete"
+    assert saved["meta"]["servers"]["granian"]["version"] == "granian test"
+    assert len(saved["attempts"]) == run_environment.bencher.run_once.call_count == 4
+    assert (output / "report.html").is_file()
+    assert read_results(output, stand="granian", app="py")[4]["rps"] == 10
+    assert read_results(output, stand="granian_ssl", app="py")[4]["rps"] == 10
+    assert [trace.name for trace in RunReport(saved).create_figure().data if trace.showlegend] == [
+        "S1 · granian/py", "S2 · granian_ssl/py",
+    ]
+    assert len(run_environment.handles) == 2
+
+    for handle in run_environment.handles:
+        handle.stop.assert_called_once()
