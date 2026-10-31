@@ -1,8 +1,11 @@
 from .apps import APPS
-from .benchers import BENCHERS, stats_dump, stats_load
-from .configuration import Settings, bootstrap
+from .artifacts import stats_dump, stats_load
+from .benchers import BENCHERS
+from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
 from .plotting import plot
+from .results import SampleResult
+from .runner import Runner, RunOptions
 from .shortcuts import gather_stats, stand_run
 from .stands import STANDS
 
@@ -11,7 +14,11 @@ __all__ = [
     "BENCHERS",
     "STANDS",
     "VERSION",
+    "LoadSpec",
     "NarrowException",
+    "Runner",
+    "RunOptions",
+    "SampleResult",
     "Settings",
     "bootstrap",
     "gather_stats",

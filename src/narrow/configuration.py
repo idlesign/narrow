@@ -1,4 +1,6 @@
+import math
 import resource
+from dataclasses import dataclass
 from pathlib import Path
 
 from envbox import SettingsBase
@@ -9,8 +11,6 @@ class SettingsDefinition(SettingsBase):
     THREADS = 1
     LOG_WRITE = False
     MAX_CONNECTIONS = 8191
-    STOP_ON_BENCHER_ERROR = False
-    BENCHER_NAP = 0.25
     FILENAME_STATS_PLOT = "narrow-stats.html"
     FILENAME_STATS_DUMP = "narrow-stats.json"
 
@@ -56,3 +56,41 @@ def get_environment_info() -> dict:
 def bootstrap() -> dict:
     """Return environment observations; never overwrite requested limits."""
     return get_environment_info()
+
+
+@dataclass(frozen=True)
+class LoadSpec:
+    """One HTTP/1.1 workload: exactly one request count or duration, never both."""
+
+    clients: int = 1
+    requests: int | None = None
+    duration: float | None = None
+    qps: float | None = None
+    worker_threads: int = 1
+    timeout: float = 5.0
+    connect_timeout: float = 2.0
+    keepalive: bool = True
+    drain: bool = True
+
+    def __post_init__(self) -> None:
+
+        for name in ("clients", "worker_threads"):
+            value = getattr(self, name)
+
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+
+        if (self.requests is None) == (self.duration is None):
+            raise ValueError("Specify exactly one of requests or duration")
+
+        if self.requests is not None and (type(self.requests) is not int or self.requests <= 0):
+            raise ValueError("requests must be a positive integer")
+
+        for name in ("duration", "qps", "timeout", "connect_timeout"):
+            value = getattr(self, name)
+
+            if value is not None and (type(value) not in (float, int) or not math.isfinite(value) or value <= 0):
+                raise ValueError(f"{name} must be finite and positive")
+
+        if type(self.keepalive) is not bool or type(self.drain) is not bool:
+            raise ValueError("keepalive and drain must be boolean")

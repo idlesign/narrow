@@ -1,0 +1,1 @@
+{"summary":{"successRate":1.0,"total":2.0,"requestsPerSec":5.0},"statusCodeDistribution":{"200":10},"errorDistribution":{},"latencyPercentiles":{"p50":0.01,"p95":0.02,"p99":0.03}}

@@ -1,84 +1,28 @@
-from datetime import UTC, datetime
+from pathlib import Path
 from time import sleep
 
-from ._base import OSComponent, PythonComponent
 from .apps import APPS
-from .benchers import BENCHERS
-from .configuration import bootstrap
+from .exceptions import NarrowException
+from .runner import Runner, RunOptions
 from .stands import STANDS
-from .utils import get_logger
-
-LOG = get_logger(__name__)
 
 
-def get_component(registry, alias=None):
+def stand_run(*, stand_alias: str, app_alias: str = "py") -> None:
+    """Run one selected local stand until interrupted, with owned cleanup."""
 
-    if not alias:
-        alias = next(iter(registry))
-
-    return registry[alias]
-
-
-def stand_run(*, stand_alias, app_alias=None):
-    """Run a selected stand until interrupted, then invoke its cleanup."""
-
-    bootstrap()
+    if stand_alias not in STANDS or app_alias not in APPS:
+        raise NarrowException("Unknown stand or application")
 
     stand = STANDS[stand_alias]()
-    app = get_component(APPS, app_alias)()
+    app = APPS[app_alias]() if stand.uses_app else None
 
     with stand.setup(app):
+
         while True:
-            sleep(1)
+            stand.check_running()
+            sleep(0.1)
 
 
-def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
-    """Run selected stand/application combinations and return their statistics."""
-
-    bootstrap()
-    app_aliases = app_aliases or list(APPS.keys())
-
-    stats_items = {}
-
-    versions = []
-
-    stats = {
-        'meta': {
-            'date': datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S'),
-            'versions': versions,
-            'settings': {},  # e.g. connections_max
-        },
-        'items': stats_items,
-    }
-
-    bencher = get_component(BENCHERS, bencher_alias)()
-
-    versions.extend([
-        OSComponent().get_version(),
-        PythonComponent().get_version(),
-        bencher.get_version(),
-    ])
-
-    for alias, stand_class in STANDS.items():
-
-        if not stand_alias or stand_alias == alias:
-            stand = stand_class()
-            LOG.info('')
-
-            version = stand.get_version()
-            versions.append(version)
-
-            for app_alias in app_aliases:
-                LOG.info('')
-                app = get_component(APPS, app_alias)()
-                app_version = app.get_version()
-
-                with stand.setup(app):
-                    results = bencher.run(stand)
-                    stats_items[stand.get_alias_full()] = results
-
-                sleep(1)  # need to wait for process instead, but for now - cooldown
-
-                versions.append(app_version)
-
-    return stats
+def gather_stats(options: RunOptions, output: Path) -> dict:
+    """Execute an explicit run matrix and save evidence in a new directory."""
+    return Runner(options).run(output)

@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 from click.testing import CliRunner
 
@@ -37,3 +39,18 @@ def test_cli_failure_goes_to_stderr(monkeypatch: pytest.MonkeyPatch, capsys: pyt
     captured = capsys.readouterr()
     assert captured.out == ""
     assert captured.err == "benchmark unavailable\n"
+
+
+@pytest.mark.parametrize("arguments", [
+    ["runlocal"], ["runlocal", "--stand", "nginx_static", "--output", "new-run"],
+    ["runlocal", "--stand", "nginx_static", "--requests", "1", "--duration", "1", "--output", "new-run"],
+    ["runlocal", "--stand", "nginx_static", "--requests", "1", "--budget", "nan", "--output", "new-run"],
+])
+def test_cli_rejects_implicit_or_invalid_load(arguments: list[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    gather = Mock(side_effect=AssertionError("invalid workload reached runner"))
+    monkeypatch.setattr(cli, "gather_stats", gather)
+
+    result = CliRunner().invoke(cli.entry_point, arguments)
+
+    assert result.exit_code != 0
+    gather.assert_not_called()
