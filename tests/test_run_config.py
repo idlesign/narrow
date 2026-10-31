@@ -6,7 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from narrow import LoadSpec, NarrowException, Runner, SubjectSpec, read_run_config
+from narrow import LoadSpec, NarrowException, ProcessLimits, Runner, SubjectSpec, read_run_config
 from narrow.targets import command as target_commands
 
 URL_TARGET = "[[targets]]\nname = \"external\"\nurl = \"http://example.test/\"\n"
@@ -30,6 +30,8 @@ def test_read_config_without_opening_references_or_starting_tools(
     ) for clients in (1, 4))
     assert options.repeats == 2 and options.warmup_requests == 3 and options.budget == 90
     assert options.ready_timeout == 2 and options.attempt_timeout == 12
+    assert options.generator_limits == ProcessLimits(cpus=(2, 3), address_space_bytes=1024**3)
+    assert plan["options"]["generator_limits"] == options.generator_limits.serialize()
     assert options.request.method == "POST" and options.request.expected_status == 201
     assert options.request.expected_response_bytes == 12 and options.request.max_body_bytes == 32
     assert options.request.body == tmp_path / "inputs/body.bin"
@@ -129,6 +131,19 @@ def test_reject_invalid_subject_config(tmp_path: Path, subject: str, message: st
 def test_reject_invalid_run_settings(tmp_path: Path, run: str, message: str) -> None:
     source = tmp_path / "run.toml"
     source.write_text(f"[run]\n{run}\n{URL_TARGET}")
+
+    with pytest.raises(ValueError, match=message):
+        read_run_config(source)
+
+
+@pytest.mark.parametrize(("setting", "message"), [
+    ("unknown = 1", "Unknown fields in generator"),
+    ("cpus = []", "cpus must"), ("cpus = [true]", "cpus must"),
+    ("cpus = [1, 1]", "cpus must"), ("address_space_bytes = -1", "address_space_bytes must"),
+])
+def test_reject_invalid_generator_settings(tmp_path: Path, setting: str, message: str) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(f"[run]\nrequests = 1\n[generator]\n{setting}\n{URL_TARGET}")
 
     with pytest.raises(ValueError, match=message):
         read_run_config(source)

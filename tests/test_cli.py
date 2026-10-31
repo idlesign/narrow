@@ -71,6 +71,7 @@ def test_dry_run_from_foreign_directory_has_no_external_effects(tmp_path: Path, 
     result = CliRunner().invoke(cli.entry_point, [
         "run", "--url", "https://example.test/original", "--method", "POST", "--path", "/upload?key=PRIVATE",
         "--body", "not-opened.bin", "--header", "Authorization: Bearer SECRET", "--requests", "3", "--dry-run",
+        "--generator-cpu", "3", "--generator-cpu", "2", "--generator-address-space-bytes", "1073741824",
     ])
 
     assert result.exit_code == 0, result.output
@@ -80,6 +81,7 @@ def test_dry_run_from_foreign_directory_has_no_external_effects(tmp_path: Path, 
     assert not data["runtime_tools_verified"] and not data["input_files_verified"]
     assert data["cases"][0]["request_url"].startswith("https://example.test/upload?")
     assert data["options"]["request"]["method"] == "POST"
+    assert data["options"]["generator_limits"] == {"cpus": [2, 3], "address_space_bytes": 1024**3, "file_size_bytes": None}
     assert "PRIVATE" not in result.stdout and "SECRET" not in result.stdout
     assert result.stderr == ""
     assert list(tmp_path.iterdir()) == []

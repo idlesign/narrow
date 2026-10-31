@@ -13,6 +13,7 @@ from .._base import Component
 from ..configuration import LoadSpec
 from ..exceptions import BencherException, NarrowException
 from ..processes import ProcessHandle, run_command
+from ..processes.limits import ProcessLimits
 from ..requests import RequestSpec, snapshot_request, redact_url
 from ..reports.results import SampleResult
 
@@ -107,14 +108,19 @@ class Bencher(Component):
 
     def run_once(
         self, url: str, load: LoadSpec, *, timeout: float, request: RequestSpec = RequestSpec(),
+        limits: ProcessLimits = ProcessLimits(),
     ) -> SampleResult:
         """Snapshot inputs outside the measured interval and redact known request secrets."""
+
+        if not isinstance(limits, ProcessLimits):
+            raise ValueError("limits must be a ProcessLimits instance")
+
         url = request.build_url(url)
         self.validate_load(url, load, request=request)
 
         with TemporaryDirectory(prefix="narrow-request-") as directory:
             prepared, metadata = snapshot_request(request, Path(directory))
-            sample = self._run_once(url, load, timeout=timeout, request=prepared)
+            sample = self._run_once(url, load, timeout=timeout, request=prepared, limits=limits)
 
         metadata.update(url=redact_url(url), url_sha256=hashlib.sha256(url.encode()).hexdigest())
         sample.request = metadata
@@ -138,13 +144,15 @@ class Bencher(Component):
 
         return sample
 
-    def _run_once(self, url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
+    def _run_once(
+        self, url: str, load: LoadSpec, *, timeout: float, request: RequestSpec, limits: ProcessLimits,
+    ) -> SampleResult:
         """Keep raw evidence on cancellation, timeout, parse and generator failure."""
 
         if self.provenance is None:
             self.prepare()
 
-        process = ProcessHandle(self.build_argv(url, load, request=request))
+        process = ProcessHandle(self.build_argv(url, load, request=request), limits=limits)
         began = monotonic()
         result = None
         failure = None
@@ -184,4 +192,5 @@ class Bencher(Component):
         sample.returncode = result.returncode if result else process.get_returncode()
         sample.elapsed = monotonic() - began
         sample.cleanup_error = cleanup_error
+        sample.execution = result.execution if result is not None else process.get_execution()
         return sample

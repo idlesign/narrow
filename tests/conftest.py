@@ -11,6 +11,7 @@ from narrow.configuration import LoadSpec
 from narrow.requests import RequestSpec
 from narrow.targets import command as target_commands
 from narrow.processes import CommandResult
+from narrow.processes.limits import ProcessLimits
 from narrow.targets import CommandTarget
 from narrow.reports.results import SampleResult
 from narrow.stands import _base, granian, nginx, uwsgi
@@ -51,7 +52,7 @@ def run_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNa
         handles.append(handle)
         return handle
 
-    def measure(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
+    def measure(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec, limits: ProcessLimits) -> SampleResult:
         return SampleResult(
             load.clients, status="ok", rps=10.0, responses=load.requests,
             successful_responses=load.requests, raw_stdout=b"generator JSON", raw_stderr=b"diagnostics",

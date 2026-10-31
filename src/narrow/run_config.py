@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .configuration import LoadSpec
 from .requests import RequestSpec
+from .processes.limits import ProcessLimits
 from .runner import Runner, RunOptions
 from .targets import CommandTarget, UrlTarget
 from .targets.subjects import SubjectSpec
@@ -84,7 +85,7 @@ def read_target(value: object, *, base: Path, index: int) -> UrlTarget:
 def read_run_config(path: Path) -> RunOptions:
     """Read a regular UTF-8 TOML file into validated run options, without starting tools.
 
-    Tables are run, request and targets. Body/CA/cwd paths are relative to the file;
+    Tables are run, request, generator and targets. Body/CA/cwd paths are relative to the file;
     argv paths follow the command cwd. No shell, variable substitution or raw config
     persistence is added. Only the configuration is read, not its referenced inputs.
     """
@@ -107,9 +108,11 @@ def read_run_config(path: Path) -> RunOptions:
     except (UnicodeDecodeError, tomllib.TOMLDecodeError, RecursionError) as error:
         raise ValueError("Invalid run config TOML") from error
 
-    data = read_table(data, name="config", fields={"run", "request", "targets"})
+    data = read_table(data, name="config", fields={"run", "request", "generator", "targets"})
     run = read_table(data.get("run", {}), name="run", fields=RUN_FIELDS | LOAD_FIELDS.keys() | {"clients"})
     request = read_table(data.get("request", {}), name="request", fields=REQUEST_FIELDS)
+    generator = read_table(data.get("generator", {}), name="generator", fields={"cpus", "address_space_bytes", "file_size_bytes"})
+    limits = ProcessLimits(**generator)
 
     for name in ("body", "ca_file"):
 
@@ -152,7 +155,7 @@ def read_run_config(path: Path) -> RunOptions:
         raise ValueError("targets must be an array of tables")
 
     options = RunOptions(
-        **run, loads=loads, request=request_spec,
+        **run, loads=loads, request=request_spec, generator_limits=limits,
         targets=tuple(read_target(target, base=source.parent, index=index) for index, target in enumerate(targets, 1)),
     )
     Runner(options).plan()

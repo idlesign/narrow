@@ -15,6 +15,7 @@ from .reports.artifacts import RunStore
 from .benchers import BENCHERS
 from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
+from .processes.limits import ProcessLimits
 from .requests import RequestSpec, snapshot_request
 from .requests import redact_url
 from .stands import STANDS
@@ -32,6 +33,7 @@ class RunOptions:
     apps: tuple[str, ...] = ("py",)
     targets: tuple[Target, ...] = ()
     request: RequestSpec = RequestSpec()
+    generator_limits: ProcessLimits = ProcessLimits()
     bencher: str = "oha"
     repeats: int = 1
     warmup_requests: int = 0
@@ -40,6 +42,9 @@ class RunOptions:
     budget: float = 120.0
 
     def __post_init__(self) -> None:
+
+        if not isinstance(self.generator_limits, ProcessLimits):
+            raise ValueError("generator_limits must be a ProcessLimits instance")
 
         if not (self.stands or self.targets) or not self.loads or (self.stands and not self.apps):
             raise ValueError("Select at least one target, workload and application for built-in stands")
@@ -75,6 +80,7 @@ class RunOptions:
         return {
             "stands": self.stands, "apps": self.apps, "loads": [asdict(load) for load in self.loads],
             "targets": [target.describe() for target in self.targets], "request": self.request.serialize(),
+            "generator_limits": self.generator_limits.serialize(),
             **{name: getattr(self, name) for name in (
                 "bencher", "repeats", "warmup_requests", "attempt_timeout", "ready_timeout", "budget",
             )},
@@ -205,6 +211,7 @@ class Runner:
 
                     sample = bencher.run_once(
                         target.url, load, request=request, timeout=min(options.attempt_timeout, remaining),
+                        limits=options.generator_limits,
                     )
                     store.save_attempt(sample, {
                         **identity, "phase": phase, "repeat": repeat, "load": asdict(load),

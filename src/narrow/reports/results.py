@@ -27,6 +27,7 @@ class SampleResult:
     returncode: int | None = None
     elapsed: float = 0.0
     cleanup_error: str | None = None
+    execution: dict = field(default_factory=dict)
     raw_stdout: bytes = b""
     raw_stderr: bytes = b""
 

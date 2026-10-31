@@ -7,6 +7,7 @@ import pytest
 from narrow import APPS, NarrowException, SubjectSpec, runner, stats_load
 from narrow.configuration import LoadSpec
 from narrow.requests import RequestSpec
+from narrow.processes.limits import ProcessLimits
 from narrow.reports.results import SampleResult
 from narrow.runner import Runner, RunOptions
 from narrow.targets import UrlTarget
@@ -21,6 +22,7 @@ def test_warmup_repeats_and_static_deduplication(
     options = RunOptions(
         stands=(stand_alias,), loads=(LoadSpec(requests=2), LoadSpec(requests=2, clients=2)),
         apps=("py", "flask"), repeats=2, warmup_requests=3,
+        generator_limits=ProcessLimits(cpus=(2,), address_space_bytes=1024**3),
     )
 
     result = Runner(options).run(tmp_path / "run")
@@ -35,6 +37,8 @@ def test_warmup_repeats_and_static_deduplication(
     assert run_environment.ready.call_count == 1
     assert len(stats_load(tmp_path / "run")["attempts"]) == 6
     run_environment.handles[0].stop.assert_called_once()
+    assert result["meta"]["options"]["generator_limits"] == options.generator_limits.serialize()
+    assert all(call.kwargs["limits"] is options.generator_limits for call in run_environment.bencher.run_once.call_args_list)
 
 
 def test_interrupt_keeps_previous_and_cancelled_attempts(tmp_path: Path, run_environment: SimpleNamespace) -> None:
@@ -71,7 +75,7 @@ def test_readiness_failure_is_checkpointed(tmp_path: Path, run_environment: Simp
 def test_cleanup_failure_stops_before_next_topology(tmp_path: Path, run_environment: SimpleNamespace) -> None:
     options = RunOptions(stands=("nginx_static", "uwsgi"), loads=(LoadSpec(requests=2),))
 
-    def fail_cleanup(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
+    def fail_cleanup(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec, limits: ProcessLimits) -> SampleResult:
         run_environment.handles[0].stop.side_effect = NarrowException("cannot stop")
         return SampleResult(1, status="ok", rps=10)
 
@@ -104,7 +108,7 @@ def test_budget_exhaustion_does_not_start_next_attempt(
     monkeypatch.setattr(runner, "monotonic", lambda: clock[0])
     options = RunOptions(stands=("nginx_static",), loads=(LoadSpec(requests=2),), repeats=2, budget=35)
 
-    def use_budget(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
+    def use_budget(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec, limits: ProcessLimits) -> SampleResult:
         clock[0] += timeout
         return SampleResult(1, status="ok", rps=10)
 
@@ -119,6 +123,7 @@ def test_budget_exhaustion_does_not_start_next_attempt(
 
 @pytest.mark.parametrize("parameters", [
     {"repeats": 0}, {"budget": float("nan")}, {"attempt_timeout": -1}, {"warmup_requests": True},
+    {"generator_limits": {}},
 ])
 def test_invalid_run_options(parameters: dict) -> None:
 
@@ -159,7 +164,7 @@ def test_runner_freezes_one_body_for_all_repeats(tmp_path: Path, run_environment
     source.write_bytes(b"original")
     received = []
 
-    def measure(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
+    def measure(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec, limits: ProcessLimits) -> SampleResult:
         received.append(request.body.read_bytes())
         source.write_bytes(b"changed")
         return SampleResult(load.clients, status="ok")

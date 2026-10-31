@@ -2,6 +2,7 @@ from .apps import APPS
 from .reports.artifacts import stats_dump, stats_load
 from .benchers import BENCHERS
 from .configuration import LoadSpec, Settings, bootstrap
+from .processes.limits import ProcessLimits
 from .exceptions import NarrowException
 from .reports.metrics import MetricSpec
 from .reports.plotting import plot
@@ -21,6 +22,7 @@ __all__ = [
     "VERSION",
     "LoadSpec",
     "MetricSpec",
+    "ProcessLimits",
     "RequestSpec",
     "UrlTarget",
     "CommandTarget",

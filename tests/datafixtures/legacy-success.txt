@@ -1,0 +1,2 @@
+finished in 1s, 10 requests, 10 req/s,
+status codes: 10 2xx, 0 3xx, 0 4xx, 0 5xx

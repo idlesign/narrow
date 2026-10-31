@@ -12,6 +12,10 @@ connect_timeout = 0.5
 keepalive = false
 drain = false
 
+[generator]
+cpus = [3, 2]
+address_space_bytes = 1073741824
+
 [request]
 method = "POST"
 path = "/upload?key=PATH_SECRET"

@@ -9,6 +9,7 @@ from click.core import ParameterSource
 from . import APPS, BENCHERS, STANDS, VERSION
 from .reports.artifacts import stats_load
 from .configuration import LoadSpec, Settings
+from .processes.limits import ProcessLimits
 from .exceptions import NarrowException
 from .reports.plotting import plot
 from .runner import Runner, RunOptions
@@ -59,6 +60,11 @@ def entry_point(verbose: bool) -> None:
 @click.option("--repeats", type=click.IntRange(min=1), default=1, show_default=True)
 @click.option("--warmup-requests", type=click.IntRange(min=0), default=0, help="Separate unmeasured count at each concurrency point.")
 @click.option("--worker-threads", type=click.IntRange(min=1), default=1, show_default=True)
+@click.option("--generator-cpu", type=click.IntRange(min=0), multiple=True, help="Initial nonexclusive generator CPU mask; repeatable.")
+@click.option(
+    "--generator-address-space-bytes", type=click.IntRange(min=1),
+    help="Generator RLIMIT_AS per process, not RSS; inherited when omitted.",
+)
 @click.option("--request-timeout", type=float, default=5.0, show_default=True)
 @click.option("--connect-timeout", type=float, default=2.0, show_default=True)
 @click.option("--attempt-timeout", type=float, default=30.0, show_default=True)
@@ -80,6 +86,7 @@ def run(
     env: tuple[str, ...], ready_path: str, ready_status: int, method: str, path: str | None,
     header: tuple[str, ...], body: Path | None, ca_file: Path | None, expected_status: int | None,
     expected_bytes: int | None, dry_run: bool, execute: bool, command: tuple[str, ...],
+    generator_cpu: tuple[int, ...], generator_address_space_bytes: int | None,
 ) -> None:
     """Run only explicitly requested workloads; no benchmark starts with defaults alone."""
 
@@ -160,6 +167,7 @@ def run(
             options = RunOptions(
                 stands=stand, apps=app if stand else (), targets=targets, request=request,
                 bencher=bencher, loads=loads, repeats=repeats,
+                generator_limits=ProcessLimits(cpus=generator_cpu or None, address_space_bytes=generator_address_space_bytes),
                 warmup_requests=warmup_requests, attempt_timeout=attempt_timeout, ready_timeout=ready_timeout, budget=budget,
             )
 

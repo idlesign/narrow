@@ -11,6 +11,7 @@ from narrow.benchers.oha import OhaBencher, parse_oha_report
 from narrow.configuration import LoadSpec, get_ssl_ca_path
 from narrow.exceptions import BencherException
 from narrow.processes import CommandResult
+from narrow.processes.limits import ProcessLimits
 from narrow.requests import RequestSpec
 
 
@@ -153,7 +154,7 @@ def test_run_snapshots_body_and_redacts_credentials(
     seen = []
     stdout = datafix_readbin("oha/success.json")
 
-    def create(argv: list[str]) -> Mock:
+    def create(argv: list[str], *, limits: ProcessLimits) -> Mock:
         snapshot = Path(argv[argv.index("-D") + 1])
         seen.append(snapshot)
         assert snapshot.read_bytes() == b"payload"

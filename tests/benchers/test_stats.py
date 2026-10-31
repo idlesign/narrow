@@ -34,10 +34,15 @@ def test_load_reports_corrupt_input(tmp_path: Path) -> None:
 def test_save_attempt_before_next_failure(tmp_path: Path) -> None:
     store = RunStore(tmp_path / "new-run", {"date": "2026-10-31"})
     store.prepare()
-    sample = SampleResult(1, status="invalid", raw_stdout=b"partial\x00json", raw_stderr=b"diagnostic")
+    sample = SampleResult(
+        1, status="invalid", raw_stdout=b"partial\x00json", raw_stderr=b"diagnostic",
+        execution={"limits": {"requested": {"cpus": [2]}, "applied": None, "error": "setup failed"}, "resources": None},
+    )
 
     store.save_attempt(sample, {"phase": "measurement"})
 
     loaded = stats_load(store.path)
     assert loaded["attempts"][0]["status"] == "invalid"
+    assert loaded["attempts"][0]["execution"] == sample.execution
+    assert json.loads((store.path / "attempt-0001/result.json").read_bytes())["execution"] == sample.execution
     assert (store.path / "attempt-0001/stdout.bin").read_bytes() == sample.raw_stdout
