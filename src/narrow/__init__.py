@@ -3,6 +3,7 @@ from .artifacts import stats_dump, stats_load
 from .benchers import BENCHERS
 from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
+from .metrics import MetricSpec
 from .plotting import plot
 from .results import SampleResult
 from .requests import RequestSpec
@@ -18,6 +19,7 @@ __all__ = [
     "STANDS",
     "VERSION",
     "LoadSpec",
+    "MetricSpec",
     "RequestSpec",
     "UrlTarget",
     "CommandTarget",

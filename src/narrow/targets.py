@@ -23,6 +23,9 @@ from .requests import RequestSpec, redact_url, validate_url
 from .stands import STANDS
 
 LOG = logging.getLogger(__name__)
+PUBLIC_ENV_SWITCHES = frozenset((
+    "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE", "PYTHONUNBUFFERED", "PYTHONSAFEPATH", "PYTHONUTF8",
+))
 
 class UrlTarget:
     """An explicit external endpoint; narrow neither starts nor stops its server."""
@@ -108,16 +111,19 @@ class CommandTarget(UrlTarget):
         self._binary = {}
 
     def _redact(self, data: bytes) -> bytes:
+        # Fixed interpreter switches are public; unknown overrides remain private.
+        secrets = {
+            value for name, value in self.env.items()
+            if value and not (name in PUBLIC_ENV_SWITCHES and value in ("0", "1"))
+        }
 
-        for value in sorted(set(self.env.values()), key=len, reverse=True):
-
-            if value:
-                data = data.replace(value.encode(), b"[redacted]")
+        for value in sorted(secrets, key=len, reverse=True):
+            data = data.replace(value.encode(), b"[redacted]")
 
         return RequestSpec().redact(RequestSpec().redact(data, self.url), self.ready_url)
 
     def describe(self) -> dict:
-        """Environment overrides are identified by names, never plaintext values."""
+        """Record override names, preserving public switches and redacting other values."""
         return {
             **super().describe(), "argv": [self._redact(value.encode()).decode() for value in self.argv],
             "cwd": f"{self.cwd}" if self.cwd is not None else None, "env_keys": sorted(self.env),
@@ -239,7 +245,7 @@ class CommandTarget(UrlTarget):
                 self.process = None
 
     def get_evidence(self) -> list[dict]:
-        """Retain server/probe diagnostics, with explicit redaction of environment overrides."""
+        """Retain server/probe diagnostics with private environment values removed."""
         files = {
             "stdout.bin": self.output[0], "stderr.bin": self.output[1],
             "ready-stdout.bin": self.probe_output[0], "ready-stderr.bin": self.probe_output[1],

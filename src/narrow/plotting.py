@@ -14,12 +14,15 @@ from plotly.subplots import make_subplots
 
 from .configuration import Settings
 from .exceptions import NarrowException
+from .metrics import MetricSpec
 
 COLORS = (
     "#2563eb", "#15803d", "#d97706", "#7c3aed", "#0891b2",
     "#be123c", "#64748b", "#a16207", "#c026d3", "#0f766e",
 )
 DASHES = ("solid", "dash", "dot")
+THROUGHPUT_METRIC = MetricSpec("Successful responses/s (2xx)", higher_is_better=True)
+LATENCY_METRIC = MetricSpec("Latency (ms)", higher_is_better=False)
 
 def read_metric(attempt: dict, metric: str, percentile: str | None = None) -> float | None:
     """Read a usable finite metric; failed or unverified attempts are not measurements."""
@@ -127,6 +130,7 @@ class RunReport:
                 name = label if is_comparison else percentile or "2xx RPS"
                 legend_group = series if is_comparison else name
                 population = latency_population if percentile else "2xx responses / whole-run seconds"
+                specification = LATENCY_METRIC if percentile else THROUGHPUT_METRIC
                 color_index = group_index if is_comparison else max(0, metric_index - 1)
                 color = COLORS[color_index % len(COLORS)]
                 dash = DASHES[metric_index - 1] if is_comparison and percentile else "solid"
@@ -134,6 +138,7 @@ class RunReport:
                     "series": series, "target": stand, "app": app,
                     "policy": json.loads(policy), "request": json.loads(request_json),
                     "population": population, "metric": percentile or metric,
+                    "higher_is_better": specification.higher_is_better,
                 }
                 hover_title = f"{escape(label)} · {percentile or "2xx RPS"}<br>"
                 hover = f"<br>{escape(population)}<extra></extra>"
@@ -192,8 +197,8 @@ class RunReport:
             ticktext=[f"{clients}" for clients in all_clients], showgrid=False, zeroline=False,
         )
         figure.update_yaxes(rangemode="tozero", gridcolor="#e2e8f0", zeroline=False)
-        figure.update_yaxes(title_text="Successful responses/s (2xx)", row=1, col=1)
-        figure.update_yaxes(title_text="Latency (ms)", row=1, col=2)
+        figure.update_yaxes(title_text=escape(THROUGHPUT_METRIC.format_label()), row=1, col=1)
+        figure.update_yaxes(title_text=escape(LATENCY_METRIC.format_label()), row=1, col=2)
         caption = (
             "Lines: medians · bars: min–max, not confidence intervals · faint dots: individual attempts."
             "<br>Latency: medians of per-attempt percentiles, not pooled percentiles. Missing/invalid values remain gaps."

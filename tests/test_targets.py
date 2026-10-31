@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -44,6 +45,61 @@ def test_command_preserves_argv_cwd_and_private_environment(command_environment:
     assert target.process is None
     environment.server.stop.assert_called_once()
     environment.probe.wait.assert_called_once_with(timeout=2)
+
+@pytest.mark.parametrize(("switch", "value"), [
+    ("PYTHONDONTWRITEBYTECODE", "1"), ("PYTHONNOUSERSITE", "1"), ("PYTHONUNBUFFERED", "1"),
+    ("PYTHONSAFEPATH", "1"), ("PYTHONUTF8", "0"),
+])
+def test_public_env_switches_preserve_command_and_diagnostics(
+    command_environment: SimpleNamespace, switch: str, value: str,
+) -> None:
+    environment = command_environment
+    argv = ("./server", "--http11-socket", "127.0.0.1:8011", "--workers", "1")
+    output = {"pid": 11201, "start_ticks": 1171271, "address": "127.0.0.1:8011"}
+    environment.server.collect_output.return_value = (json.dumps(output).encode(), b"PRIVATE")
+    target = CommandTarget(
+        "http://127.0.0.1:8011/", argv, cwd=environment.binary.parent,
+        env={switch: value, "SECRET": "PRIVATE"},
+    )
+
+    metadata = target.prepare()
+
+    with target.setup(timeout=1):
+        pass
+
+    evidence = target.get_evidence()[0]
+    assert metadata["argv"] == [f"{environment.binary}", *argv[1:]]
+    assert evidence["argv"] == metadata["argv"]
+    assert json.loads(evidence["files"]["stdout.bin"]) == output
+    assert json.loads(evidence["files"]["ready-stdout.bin"]) == {"attempts": 1}
+    assert evidence["files"]["stderr.bin"] == b"[redacted]"
+    assert "PRIVATE" not in repr(metadata) + repr(evidence)
+
+@pytest.mark.parametrize(("overrides", "private_value"), [
+    ({"TOKEN": "1", "PYTHONNOUSERSITE": "1"}, "1"),
+    ({"TOKEN": "0", "PYTHONUTF8": "0"}, "0"),
+    ({"CUSTOM": "x"}, "x"),
+    ({"PYTHONUNBUFFERED": "PRIVATE"}, "PRIVATE"),
+])
+def test_short_and_nonstandard_env_values_remain_private(
+    command_environment: SimpleNamespace, overrides: dict[str, str], private_value: str,
+) -> None:
+    environment = command_environment
+    environment.server.collect_output.return_value = (private_value.encode(), private_value.encode())
+    target = CommandTarget(
+        "http://127.0.0.1:8080/", ("./server", f"before{private_value}after"),
+        cwd=environment.binary.parent, env=overrides,
+    )
+
+    metadata = target.prepare()
+
+    with target.setup(timeout=1):
+        pass
+
+    evidence = target.get_evidence()[0]
+    assert metadata["argv"][-1] == "before[redacted]after"
+    assert evidence["argv"] == metadata["argv"]
+    assert evidence["files"]["stdout.bin"] == evidence["files"]["stderr.bin"] == b"[redacted]"
 
 @pytest.mark.parametrize("executable", ["./venv/bin/python", "python"])
 def test_command_preserves_interpreter_symlink(

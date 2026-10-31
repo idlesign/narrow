@@ -40,8 +40,11 @@ def test_plot_measured_points_and_gaps(saved_run: dict) -> None:
     assert samples.x == (1, 4) and samples.y == (100, 200)
     assert samples.mode == "markers"
     assert samples.legendgroup == throughput.legendgroup
-    assert figure.layout.yaxis.title.text == "Successful responses/s (2xx)"
-    assert figure.layout.yaxis2.title.text == "Latency (ms)"
+    assert figure.layout.yaxis.title.text == "Successful responses/s (2xx) — ↑ higher is better"
+    assert figure.layout.yaxis2.title.text == "Latency (ms) — ↓ lower is better"
+    assert figure.layout.xaxis.title.text == "Concurrent HTTP/1.1 clients (log scale)"
+    assert throughput.meta["higher_is_better"] is samples.meta["higher_is_better"] is True
+    assert all(trace.meta["higher_is_better"] is False for trace in figure.data[2:])
 
 def test_repeats_are_not_pooled_percentiles(saved_run: dict) -> None:
     saved_run["attempts"].extend([
@@ -157,6 +160,8 @@ def test_servers_share_panels_but_keep_distinct_colors_and_legend_groups(saved_r
     assert figure.data[12].line.dash == "dash" and figure.data[14].line.dash == "dot"
     assert {trace.legendgroup for trace in figure.data[:8]} == {"S1"}
     assert {trace.legendgroup for trace in figure.data[8:]} == {"S2"}
+    assert figure.data[8].meta["higher_is_better"] is True
+    assert all(trace.meta["higher_is_better"] is False for trace in figure.data[10:])
 
 def test_external_target_cleanup_is_not_claimed(saved_run: dict) -> None:
     saved_run["stands"] = [{"stand": "nginx_static", "session": 0, "ownership": "external", "processes": []}]

@@ -250,7 +250,7 @@ url = "http://example.test"
 name = "owned"
 url = "http://127.0.0.1:8080"
 argv = ["./server", "--flag"]
-env = { TOKEN = "PRIVATE" }
+env = { TOKEN = "PRIVATE", PYTHONDONTWRITEBYTECODE = "1", PYTHONNOUSERSITE = "1" }
 """)
     foreign = tmp_path / "foreign"
     foreign.mkdir()
@@ -270,6 +270,7 @@ env = { TOKEN = "PRIVATE" }
     assert (output / "report.html").is_file()
     assert not list(output.rglob("*.toml"))
     assert not any(secret in json.dumps(saved) for secret in ("PATH_SECRET", "HEADER_SECRET", "PRIVATE"))
+    assert json.loads((output / "stand-0002/owned-ready-stdout.bin").read_bytes()) == {"attempts": 1}
     assert read_results(output, stand="external")[4]["rps"] == 10
     assert read_results(output, stand="owned")[4]["rps"] == 10
     figure = RunReport(saved).create_figure()
