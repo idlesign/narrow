@@ -1,4 +1,7 @@
-from .utils import run_command
+import platform
+import sys
+
+from .processes import run_command
 
 
 class Component:
@@ -6,25 +9,25 @@ class Component:
 
     alias = None
     prc_name = None
-    description = '<none>'
+    description = "<none>"
 
     def get_version(self) -> str:
         return f"{self.alias} x.x"
 
-    def get_alias_full(self):
+    def get_alias_full(self) -> str:
         return self.alias
 
 
 class PythonComponent(Component):
 
-    alias = 'python'
-    prc_name = 'python'
+    alias = "python"
+    prc_name = "python"
 
     def get_version(self) -> str:
-        return run_command(f"{self.prc_name} --version")
+        return run_command([sys.executable, "--version"])
 
 
 class OSComponent(Component):
 
-    def get_version(self):
-        return run_command('uname -srp')
+    def get_version(self) -> str:
+        return platform.platform()

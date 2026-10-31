@@ -10,7 +10,7 @@ from narrow import VERSION, NarrowException, cli
         pytest.param(["--version"], f"version {VERSION}", id="version"),
         pytest.param(["--help"], "runlocal", id="help"),
         pytest.param(["list-apps"], "py: Pure wsgi application", id="apps"),
-        pytest.param(["list-stands"], "uwsgi: uwsgi HTTP router", id="stands"),
+        pytest.param(["list-stands"], "uwsgi: uWSGI direct HTTP socket", id="stands"),
         pytest.param(["list-benchers"], "h2load: h2load from nghttp2", id="benchers"),
     ],
 )

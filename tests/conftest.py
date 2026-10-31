@@ -1,21 +1,22 @@
-from collections.abc import Iterator
-from pathlib import Path
+from collections.abc import Callable, Iterator
 
 import pytest
 
 from narrow import STANDS
+from narrow.stands._base import Stand
 
 
-@pytest.fixture(scope="session", autouse=True)
-def stand_socket_cleanup() -> Iterator[None]:
-    # Legacy registry construction creates placeholder Unix socket files on import.
-    socket_paths = [
-        Path(stand.child.address)
-        for stand in STANDS.values()
-        if stand.child is not None and stand.child.unix
-    ]
+@pytest.fixture
+def prepared_stand() -> Iterator[Callable[[str], Stand]]:
+    stands = []
 
-    yield
+    def prepare(alias: str) -> Stand:
+        stand = STANDS[alias]()
+        stand.resources.prepare()
+        stands.append(stand)
+        return stand
 
-    for socket_path in socket_paths:
-        socket_path.unlink(missing_ok=True)
+    yield prepare
+
+    for stand in stands:
+        stand.resources.close()

@@ -1,136 +1,101 @@
-from uwsgiconf.presets.nice import PythonSection
+import sys
+from typing import TYPE_CHECKING
 
-from ..configuration import Settings, get_path_in_current, get_ssl_tuple
-from ..utils import create_socket_file, get_logger, run_command, run_command_detached
+from ..configuration import Settings, get_ssl_tuple
+from ..processes import run_command
 from ._base import Stand, register_stand
 
-sockets = PythonSection.networking.sockets
-
-LOG = get_logger(__name__)
+if TYPE_CHECKING:
+    from uwsgiconf.options.networking_sockets import Socket
+    from uwsgiconf.presets.nice import PythonSection
 
 
 class Uwsgi(Stand):
-    """
+    """Foreground uWSGI master with direct sockets, not an implicit HTTP router."""
 
-    For SSL support compile uwsgi on system having:
-        sudo apt install libssl-dev
-
-    """
-
-    prc_name = 'uwsgi'
-
-    @property
-    def params_stub(self):
-        params = (
-            'uwsgi_param QUERY_STRING $query_string;\n'
-            'uwsgi_param REQUEST_METHOD $request_method;\n'
-            'uwsgi_param CONTENT_TYPE $content_type;\n'
-            'uwsgi_param CONTENT_LENGTH $content_length;\n'
-            'uwsgi_param REQUEST_URI $request_uri;\n'
-            'uwsgi_param PATH_INFO $document_uri;\n'
-            'uwsgi_param DOCUMENT_ROOT $document_root;\n'
-            'uwsgi_param SERVER_PROTOCOL $server_protocol;\n'
-            'uwsgi_param REMOTE_ADDR $remote_addr;\n'
-            'uwsgi_param REMOTE_PORT $remote_port;\n'
-            'uwsgi_param SERVER_ADDR $server_addr;\n'
-            'uwsgi_param SERVER_PORT $server_port;\n'
-            'uwsgi_param SERVER_NAME $server_name;\n'
+    prc_name = "uwsgi"
+    params_stub = "\n".join(
+        f"uwsgi_param {name} {value};" for name, value in (
+            ("QUERY_STRING", "$query_string"), ("REQUEST_METHOD", "$request_method"),
+            ("CONTENT_TYPE", "$content_type"), ("CONTENT_LENGTH", "$content_length"),
+            ("REQUEST_URI", "$request_uri"), ("PATH_INFO", "$document_uri"),
+            ("DOCUMENT_ROOT", "$document_root"), ("SERVER_PROTOCOL", "$server_protocol"),
+            ("REMOTE_ADDR", "$remote_addr"), ("REMOTE_PORT", "$remote_port"),
+            ("SERVER_ADDR", "$server_addr"), ("SERVER_PORT", "$server_port"), ("SERVER_NAME", "$server_name"),
         )
-        return params
+    )
 
     def get_version(self) -> str:
-        return f"uwsgi {run_command(f'{self.prc_name} --version')}"
+        """Query only the selected server executable."""
+        version = run_command([self.prc_name, "--version"])
+        return f"uwsgi {version}"
 
-    def generate_section(self, socket):
+    def generate_section(self, listener: "Socket") -> "PythonSection":
+        """Build the foreground master's configuration for the selected application."""
+        from uwsgiconf.presets.nice import PythonSection
 
-        alias = self.alias
-
-        if Settings.LOG_WRITE:
-            log_path = get_path_in_current(f"log_{alias}.log")
-
-        else:
-            log_path = '/dev/null'
-
-        section = PythonSection(
-            wsgi_module=self.app.get_entrypoint_path(),
-            process_prefix=alias,
-            workers=Settings.WORKERS,
-            threads=Settings.THREADS,
-            log_into=log_path,
-
-        ).networking.register_socket(
-            socket,
-
-        ).networking.set_basic_params(
+        return PythonSection(
+            wsgi_module=self.app.get_entrypoint_path(), process_prefix=self.alias,
+            params_python={"python_home": sys.prefix},
+            workers=Settings.WORKERS, threads=Settings.THREADS, log_into="/dev/stderr",
+        ).networking.register_socket(listener).networking.set_basic_params(
             queue_size=Settings.MAX_CONNECTIONS,
-        )
-
-        return section
+        ).logging.set_basic_params(no_requests=not Settings.LOG_WRITE)
 
     @property
-    def socket(self):
+    def socket(self) -> "Socket":
         raise NotImplementedError
 
-    def bootstrap(self):
-        super().bootstrap()
+    def bootstrap(self) -> None:
+        """Create configuration/socket paths only inside an explicit stand run."""
 
-        section = self.generate_section(self.socket)
-        config = section.as_configuration()
-        filepath = config.tofile()
+        if self.unix:
+            self.address = f"{self.resources.path / "backend.sock"}"
 
-        LOG.debug('Uwsgi config: %s', filepath)
-
-        return run_command_detached(f"{self.prc_name} --ini {filepath}")
+        config = self.generate_section(self.socket).as_configuration().format()
+        filepath = self.write_config("uwsgi.ini", config)
+        self.start_process([self.prc_name, "--ini", f"{filepath}"])
 
 
 @register_stand
 class UwsgiPy(Uwsgi):
-
-    alias = 'uwsgi'
-    address = '127.0.0.1:8002'
-    description = 'uwsgi HTTP router -> app response'
+    alias = "uwsgi"
+    address = "127.0.0.1:8002"
+    description = "uWSGI direct HTTP socket -> app response"
 
     @property
-    def socket(self):
-        return sockets.http(self.address, http11=True)
+    def socket(self) -> "Socket":
+        from uwsgiconf.presets.nice import PythonSection
+
+        return PythonSection.networking.sockets.http(self.address, http11=True)
 
 
 @register_stand
 class UwsgiSslPy(Uwsgi):
-
-    alias = 'uwsgi_ssl'
-    address = '127.0.0.1:4443'
-    protocol = 'https'
-    description = 'uwsgi HTTP router -> app response. Using SSL'
+    alias = "uwsgi_ssl"
+    address = "127.0.0.1:4443"
+    protocol = "https"
+    description = "uWSGI direct HTTPS socket -> app response"
 
     @property
-    def socket(self):
+    def socket(self) -> "Socket":
+        from uwsgiconf.presets.nice import PythonSection
+
         cert, key = get_ssl_tuple()
-        return sockets.https(self.address, cert=cert, key=key)
+        return PythonSection.networking.sockets.https(self.address, cert=cert, key=key)
 
 
 class UwsgiUwsgiSocket(Uwsgi):
+    protocol = "uwsgi"
+    address = "127.0.0.1:8003"
 
-    address = '127.0.0.1:8003'
-
-    def __init__(self, unix: bool = False) -> None:  # noqa: FBT001, FBT002 - Public positional argument.
+    def __init__(self, *, unix: bool = False) -> None:
         super().__init__()
-
         self.unix = unix
-
-        if unix:
-            alias = 'uwsgi_uwsgi_unix'
-            address = create_socket_file(prefix=alias)
-
-            LOG.debug("Uwsgi socket file: %s", address)
-
-        else:
-            alias = 'uwsgi_uwsgi_tcp'
-            address = '127.0.0.1:8003'
-
-        self.alias = alias
-        self.address = address
+        self.alias = "uwsgi_uwsgi_unix" if unix else "uwsgi_uwsgi_tcp"
 
     @property
-    def socket(self):
-        return sockets.uwsgi(self.address)
+    def socket(self) -> "Socket":
+        from uwsgiconf.presets.nice import PythonSection
+
+        return PythonSection.networking.sockets.uwsgi(self.address)

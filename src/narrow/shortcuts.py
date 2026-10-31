@@ -24,7 +24,7 @@ def stand_run(*, stand_alias, app_alias=None):
 
     bootstrap()
 
-    stand = STANDS[stand_alias]
+    stand = STANDS[stand_alias]()
     app = get_component(APPS, app_alias)()
 
     with stand.setup(app):
@@ -59,9 +59,10 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
         bencher.get_version(),
     ])
 
-    for alias, stand in STANDS.items():
+    for alias, stand_class in STANDS.items():
 
         if not stand_alias or stand_alias == alias:
+            stand = stand_class()
             LOG.info('')
 
             version = stand.get_version()

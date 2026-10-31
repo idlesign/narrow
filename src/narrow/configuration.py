@@ -1,95 +1,58 @@
+import resource
 from pathlib import Path
 
 from envbox import SettingsBase
 
-from .utils import get_logger, run_command
 
-
-class _S(SettingsBase):
-
+class SettingsDefinition(SettingsBase):
     WORKERS = 1
     THREADS = 1
     LOG_WRITE = False
     MAX_CONNECTIONS = 8191
     STOP_ON_BENCHER_ERROR = False
     BENCHER_NAP = 0.25
-    FILENAME_STATS_PLOT = 'narrow-stats'
-    FILENAME_STATS_DUMP = 'narrow-stats.json'
+    FILENAME_STATS_PLOT = "narrow-stats.html"
+    FILENAME_STATS_DUMP = "narrow-stats.json"
 
 
-Settings = _S()
-
-
-LOG = get_logger(__name__)
-DIR_PACKAGE = f"{Path(__file__).resolve().parent}"
-DIR_CURRENT = f"{Path.cwd()}"
+Settings = SettingsDefinition()
+DIR_PACKAGE = Path(__file__).resolve().parent
 
 
 def get_ssl_tuple() -> tuple[str, str]:
-    """Return paths to the bundled public test certificate and private key."""
-    cert = get_path_in_package('files/test.cer')
-    key = get_path_in_package('files/testnopass.pem')
-    return cert, key
+    """Return the deliberately public test certificate/key, never production secrets."""
+    return get_path_in_package("files/test.cer"), get_path_in_package("files/testnopass.pem")
 
 
 def get_path_in_package(filename: str) -> str:
-    """Return a resource path inside the installed package."""
-    return f"{Path(DIR_PACKAGE) / filename}"
+    """Resolve an installed package resource, independent of the working directory."""
+    return f"{DIR_PACKAGE / filename}"
 
 
 def get_path_in_current(filename: str) -> str:
-    """Return a path relative to the directory captured when importing narrow."""
-    return f"{Path(DIR_CURRENT) / filename}"
+    """Resolve a path using the current directory at the time of the call."""
+    return f"{Path.cwd() / filename}"
 
 
-def bootstrap():
-    """
-    SSL stuff (for `files` dir):
+def get_environment_info() -> dict:
+    """Observe Linux limits without changing application settings or host configuration."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    observations = {"ulimit_soft": soft, "ulimit_hard": hard}
 
-        # private key
-        openssl genrsa -aes128 -passout pass:foobar -out test.pem 2048
-        # public key
-        openssl rsa -in test.pem -passin pass:foobar -pubout -out test.pub
-        # self-signed x509 certificate
-        openssl req -x509 -new -key test.pem -passin pass:foobar -days 3650 -out test.cer
-        # remove password
-        openssl rsa -in test.pem -out testnopass.pem
-        # show info
-        openssl x509 -in test.cer -text -noout
+    for name, filename in (
+        ("max_conn", "/proc/sys/net/core/somaxconn"),
+        ("tcp_backlog", "/proc/sys/net/ipv4/tcp_max_syn_backlog"),
+    ):
 
-    """
-    env_info = get_environment_info()
+        try:
+            observations[name] = int(Path(filename).read_text().strip())
 
-    Settings.MAX_CONNECTIONS = env_info['max_conn']
+        except FileNotFoundError:
+            observations[name] = None
 
-    return env_info
+    return observations
 
 
-def get_environment_info() -> dict[str, int | str]:
-    """
-
-    From http://brianmcdonnell.github.io/pycon_ie_2013
-
-        ulimit -Hn 131072
-        ulimit -Sn 65536
-
-        sysctl -w net.core.somaxconn=8191
-        sysctl -w net.ipv4.tcp_max_syn_backlog=8191
-
-    :rtype: dict
-    """
-    env_info = {
-        "max_conn": int(run_command("cat /proc/sys/net/core/somaxconn")),
-        "tcp_backlog": int(run_command("cat /proc/sys/net/ipv4/tcp_max_syn_backlog")),
-        "ulimit_soft": run_command("ulimit -S"),
-        "ulimit_hard": run_command("ulimit -H"),
-    }
-
-    LOG.info(
-        'Current net.ipv4.tcp_max_syn_backlog = %(tcp_backlog)s\n'
-        'Current net.core.somaxconn = %(max_conn)s\n'
-        'Current ulimit soft = %(ulimit_soft)s\n'
-        'Current ulimit hard = %(ulimit_hard)s', env_info,
-    )
-
-    return env_info
+def bootstrap() -> dict:
+    """Return environment observations; never overwrite requested limits."""
+    return get_environment_info()

@@ -9,9 +9,11 @@ class Cherrypy(App):
     https://github.com/cherrypy/cherrypy
 
     """
-    alias = 'cherrypy'
-    entrypoint = 'cherrypy'
-    description = 'CherryPy framework application'
+    response_body = b"Hello world!"
+    alias = "cherrypy"
+    entrypoint = "cherrypy"
+    description = "CherryPy framework application"
 
     def get_version(self) -> str:
-        return f"CherryPy {version('cherrypy')}"
+        package_version = version("cherrypy")
+        return f"CherryPy {package_version}"
