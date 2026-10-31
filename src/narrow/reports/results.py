@@ -35,4 +35,5 @@ class SampleResult:
         data = asdict(self)
         data.pop("raw_stdout")
         data.pop("raw_stderr")
+        data["argv"] = list(self.argv)
         return data

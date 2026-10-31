@@ -1,11 +1,12 @@
 from .apps import APPS
-from .artifacts import stats_dump, stats_load
+from .reports.artifacts import stats_dump, stats_load
 from .benchers import BENCHERS
 from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
-from .metrics import MetricSpec
-from .plotting import plot
-from .results import SampleResult
+from .reports.metrics import MetricSpec
+from .reports.plotting import plot
+from .reports.results import SampleResult
+from .targets.subjects import SubjectSpec
 from .requests import RequestSpec
 from .targets import CommandTarget, UrlTarget
 from .runner import Runner, RunOptions
@@ -27,6 +28,7 @@ __all__ = [
     "Runner",
     "RunOptions",
     "SampleResult",
+    "SubjectSpec",
     "Settings",
     "bootstrap",
     "gather_stats",

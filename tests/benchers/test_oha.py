@@ -73,6 +73,22 @@ def test_build_explicit_http_policy_without_io(monkeypatch: pytest.MonkeyPatch) 
     assert "--insecure" not in argv
     prepare.assert_not_called()
 
+@pytest.mark.parametrize("correction", [None, False, True])
+def test_explicit_qps_latency_policy(correction: bool | None, datafix_readbin: Callable[[str], bytes]) -> None:
+    load = LoadSpec(requests=10, qps=5, latency_correction=correction)
+
+    argv = OhaBencher().build_argv("http://127.0.0.1:8000/", load)
+    sample = parse_oha_report(datafix_readbin("oha/success.json"), load)
+
+    assert ("--latency-correction" in argv) is (correction is not False)
+    assert ("latency-corrected" in sample.latency_population) is (correction is not False)
+
+@pytest.mark.parametrize("correction", [True, 1, "false"])
+def test_reject_invalid_latency_policy_without_qps(correction: object) -> None:
+
+    with pytest.raises(ValueError, match="latency_correction"):
+        LoadSpec(requests=10, latency_correction=correction)
+
 
 @pytest.mark.parametrize(("exit_code", "error", "expected_status"), [
     (0, None, "ok"), (2, None, "error"), (0, "timed out", "error"),

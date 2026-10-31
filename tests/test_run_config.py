@@ -6,7 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from narrow import LoadSpec, NarrowException, Runner, read_run_config, targets
+from narrow import LoadSpec, NarrowException, Runner, SubjectSpec, read_run_config
+from narrow.targets import command as target_commands
 
 URL_TARGET = "[[targets]]\nname = \"external\"\nurl = \"http://example.test/\"\n"
 
@@ -19,7 +20,7 @@ def test_read_config_without_opening_references_or_starting_tools(
     foreign.mkdir()
     monkeypatch.chdir(foreign)
     start = Mock(side_effect=AssertionError("config started a process"))
-    monkeypatch.setattr(targets, "ProcessHandle", start)
+    monkeypatch.setattr(target_commands, "ProcessHandle", start)
 
     options = read_run_config(source)
     plan = Runner(options).plan()
@@ -80,6 +81,36 @@ def test_duration_and_requested_qps_use_load_spec(tmp_path: Path) -> None:
     options = read_run_config(source)
 
     assert options.loads == (LoadSpec(clients=2, duration=0.5, qps=10),)
+
+@pytest.mark.parametrize("command", ["", "argv = [\"absent-server\"]\n"])
+def test_subject_config_is_portable_and_does_not_inspect_the_runtime(tmp_path: Path, command: str) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(
+        "[run]\nrequests = 2\n[[targets]]\nname = \"server\"\nurl = \"http://127.0.0.1:8080/\"\n"
+        f"{command}[targets.subject]\nplatform = \"any-platform\"\nrevision = \"unchanged-version\"\n"
+        f"[targets.subject.artifact_sha256]\nruntime = \"{"a" * 64}\"\n"
+    )
+
+    options = read_run_config(source)
+    plan = Runner(options).plan()
+
+    expected = SubjectSpec("any-platform", "unchanged-version", {"runtime": "a" * 64}).serialize()
+    assert plan["cases"][0]["subject"] == plan["options"]["targets"][0]["subject"] == expected
+    assert not plan["runtime_tools_verified"]
+    assert list(tmp_path.iterdir()) == [source]
+
+@pytest.mark.parametrize(("subject", "message"), [
+    ("subject = []", "subject must be a table"),
+    ("[targets.subject]\nrevision = \"label\"", "subject requires platform"),
+    ("[targets.subject]\nplatform = \"server\"\nversion = \"1\"", "Unknown fields"),
+    ("[targets.subject]\nplatform = \"server\"\nartifact_sha256 = {runtime = \"short\"}", "SHA-256"),
+])
+def test_reject_invalid_subject_config(tmp_path: Path, subject: str, message: str) -> None:
+    source = tmp_path / "run.toml"
+    source.write_text(f"[run]\nrequests = 1\n{URL_TARGET}{subject}\n")
+
+    with pytest.raises(ValueError, match=message):
+        read_run_config(source)
 
 @pytest.mark.parametrize(("run", "message"), [
     ("requests = 1\nrepeetz = 2", "Unknown fields in run"),

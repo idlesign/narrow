@@ -12,8 +12,9 @@ import plotly.graph_objects as go
 import plotly.io as pio
 from plotly.subplots import make_subplots
 
-from .configuration import Settings
-from .exceptions import NarrowException
+from ..configuration import Settings
+from ..exceptions import NarrowException
+from ..targets.subjects import read_subject
 from .metrics import MetricSpec
 
 COLORS = (
@@ -73,6 +74,16 @@ def render_table(headers: list[str], rows: list[list]) -> str:
     )
     return f"<div class=\"table-scroll\"><table><thead><tr>{heading}</tr></thead><tbody>{body}</tbody></table></div>"
 
+def format_target_label(stand: str, app: str | None, subject: dict | None) -> str:
+    """Keep the selected name and code identity visible without relying on a package version."""
+    label = f"{stand}/{app}" if app else stand
+
+    if subject is not None:
+        revision = f"@{subject["revision"]}" if subject["revision"] is not None else ""
+        label += f" · {subject["platform"]}{revision} [{subject["fingerprint"][:12]}]"
+
+    return label
+
 class RunReport:
     """Present one checkpoint, retaining request/load boundaries and cleanup evidence."""
 
@@ -100,9 +111,17 @@ class RunReport:
 
         for attempt in self.measurements:
             policy = {name: value for name, value in attempt["load"].items() if name != "clients"}
+
+            try:
+                subject = read_subject(attempt.get("subject"))
+
+            except ValueError as error:
+                raise NarrowException("Malformed saved subject identity") from error
+
             key = (
                 attempt["stand"], attempt["app"], json.dumps(policy, sort_keys=True),
                 json.dumps(attempt.get("request", {}), sort_keys=True), attempt.get("latency_population", "unavailable"),
+                json.dumps(subject, sort_keys=True),
             )
             self.groups.setdefault(key, []).append(attempt)
 
@@ -117,10 +136,11 @@ class RunReport:
         is_comparison = len(self.groups) > 1
 
         for group_index, (key, attempts) in enumerate(self.groups.items()):
-            stand, app, policy, request_json, latency_population = key
+            stand, app, policy, request_json, latency_population, subject_json = key
+            subject = json.loads(subject_json)
             clients = sorted({attempt["clients"] for attempt in attempts})
             series = f"S{group_index + 1}"
-            target = f"{stand}/{app}" if app else stand
+            target = format_target_label(stand, app, subject)
             label = f"{series} · {target}"
 
             for metric_index, (metric, percentile, column) in enumerate((
@@ -139,6 +159,7 @@ class RunReport:
                     "policy": json.loads(policy), "request": json.loads(request_json),
                     "population": population, "metric": percentile or metric,
                     "higher_is_better": specification.higher_is_better,
+                    "subject": {name: value for name, value in subject.items() if name != "artifact_sha256"} if subject else None,
                 }
                 hover_title = f"{escape(label)} · {percentile or "2xx RPS"}<br>"
                 hover = f"<br>{escape(population)}<extra></extra>"
@@ -176,9 +197,9 @@ class RunReport:
         title = "narrow"
 
         if len(self.groups) == 1:
-            stand, app, policy, request_json, population = next(iter(self.groups))
+            stand, app, policy, request_json, population, subject_json = next(iter(self.groups))
             request = json.loads(request_json)
-            title = f"{stand}/{app}" if app else stand
+            title = format_target_label(stand, app, json.loads(subject_json))
             title += f" · {request.get("method", "")} {request.get("path") or request.get("url", "")}"
 
         generator = self.metadata.get("generator", {}).get("version", "generator unavailable")
@@ -228,10 +249,11 @@ class RunReport:
         sections = []
 
         for group_index, (key, attempts) in enumerate(self.groups.items(), 1):
-            stand, app, policy, request_json, population = key
+            stand, app, policy, request_json, population, subject_json = key
+            subject = json.loads(subject_json)
             request = json.loads(request_json)
             load = json.loads(policy)
-            title = f"{stand}/{app}" if app else stand
+            title = format_target_label(stand, app, subject)
             rows = [[
                 "Request", f"{request.get("method", "unavailable")} {request.get("url", request.get("path", "unavailable"))}",
             ]]
@@ -256,6 +278,15 @@ class RunReport:
                     rows.append([label, value])
 
             rows.append(["Latency population", population])
+
+            if subject is not None:
+                rows.extend([
+                    ["Subject platform", subject["platform"]], ["Subject revision (caller-supplied)", subject["revision"]],
+                    ["Subject fingerprint", subject["fingerprint"]],
+                    ["Artifact SHA-256 (caller-supplied)", json.dumps(subject["artifact_sha256"], sort_keys=True)],
+                    ["Runtime binding", "The caller/platform adapter must verify the declared code is running"],
+                ])
+
             sections.append(f"<h3>S{group_index} · {escape(title)}</h3>" + render_table(["Condition", "Recorded value"], rows))
 
         options = self.metadata.get("options", {})

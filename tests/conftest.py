@@ -9,10 +9,10 @@ from narrow import STANDS, runner
 from narrow.benchers.oha import OhaBencher
 from narrow.configuration import LoadSpec
 from narrow.requests import RequestSpec
-from narrow import targets
+from narrow.targets import command as target_commands
 from narrow.processes import CommandResult
 from narrow.targets import CommandTarget
-from narrow.results import SampleResult
+from narrow.reports.results import SampleResult
 from narrow.stands import _base, granian, nginx, uwsgi
 from narrow.stands._base import Stand
 
@@ -85,7 +85,7 @@ def command_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Simp
     )
     create = Mock(side_effect=[server, probe])
     available = Mock()
-    monkeypatch.setattr(targets, "ProcessHandle", create)
-    monkeypatch.setattr(targets, "check_available", available)
+    monkeypatch.setattr(target_commands, "ProcessHandle", create)
+    monkeypatch.setattr(target_commands, "check_available", available)
     target = CommandTarget("http://127.0.0.1:8080/api", ("./server", "--flag"), cwd=tmp_path, env={"SECRET": "PRIVATE"})
     return SimpleNamespace(target=target, server=server, probe=probe, create=create, available=available, binary=binary)

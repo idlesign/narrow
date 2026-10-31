@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from narrow.asv import SavedRunBenchmark, read_results
+from narrow.reports.asv import SavedRunBenchmark, read_results
 
 class Http(SavedRunBenchmark):
     params = [1, 4]

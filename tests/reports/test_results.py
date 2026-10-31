@@ -1,7 +1,9 @@
+import json
+
 import pytest
 
 from narrow.configuration import LoadSpec
-from narrow.results import SampleResult
+from narrow.reports.results import SampleResult
 
 
 @pytest.mark.parametrize("parameters", [
@@ -16,10 +18,11 @@ def test_reject_invalid_load_before_external_actions(parameters: dict) -> None:
 
 
 def test_metadata_does_not_include_raw_bytes() -> None:
-    sample = SampleResult(clients=1, raw_stdout=b"raw", raw_stderr=b"err")
+    sample = SampleResult(clients=1, argv=("oha", "--no-tui"), raw_stdout=b"raw", raw_stderr=b"err")
 
     metadata = sample.serialize()
 
     assert "raw_stdout" not in metadata
     assert metadata["rps"] is None
     assert metadata["latency_ms"] == {}
+    assert json.loads(json.dumps(metadata)) == metadata

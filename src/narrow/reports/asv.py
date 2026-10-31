@@ -8,8 +8,9 @@ from pathlib import Path
 from statistics import median
 
 from .artifacts import stats_load
-from .configuration import LoadSpec
-from .exceptions import NarrowException
+from ..configuration import LoadSpec
+from ..exceptions import NarrowException
+from ..targets.subjects import read_subject
 
 type RunMetrics = dict[int, dict[str, float]]
 
@@ -70,12 +71,13 @@ def _summarize_attempts(attempts: list[dict], repeats: int, clean_sessions: set[
 
     return result
 
-def read_results(path: Path, *, stand: str, app: str | None = None) -> RunMetrics:
+def read_results(path: Path, *, stand: str, app: str | None = None, subject: str | None = None) -> RunMetrics:
     """Read one saved stand/app; incomplete repeats yield NaN, never a partial median.
 
     Latency tracks are medians of per-attempt quantiles, not pooled percentiles.
     Their population and QPS correction remain those of the saved experiment.
     This reader does not establish comparability or assign a Git revision.
+    Select a subject fingerprint when the same stand/app contains different code.
     """
     data = stats_load(path)
 
@@ -97,14 +99,23 @@ def read_results(path: Path, *, stand: str, app: str | None = None) -> RunMetric
             raise NarrowException("Ambiguous saved concurrency points")
 
         sessions = [item for item in data["stands"] if (item["stand"], item["app"]) == (stand, app)]
+        all_session_ids = {item["session"] for item in sessions}
+
+        if len(all_session_ids) != len(sessions):
+            raise NarrowException("Duplicate saved stand session")
+
+        identities = {item["session"]: read_subject(item.get("subject")) for item in sessions}
+
+        if subject is not None:
+            sessions = [item for item in sessions if (identities[item["session"]] or {}).get("fingerprint") == subject]
 
         if not sessions:
             raise NarrowException(f"No saved stand/application: {stand}/{app}")
 
         session_ids = {item["session"] for item in sessions}
 
-        if len(session_ids) != len(sessions):
-            raise NarrowException("Duplicate saved stand session")
+        if len({json.dumps(identities[item["session"]], sort_keys=True) for item in sessions}) > 1:
+            raise NarrowException("Different saved subjects; select a subject fingerprint")
 
         clean_sessions = {
             item["session"] for item in sessions if (item["processes"] or item.get("ownership") == "external")
@@ -118,6 +129,17 @@ def read_results(path: Path, *, stand: str, app: str | None = None) -> RunMetric
             if attempt["phase"] != "measurement" or (attempt["stand"], attempt["app"]) != (stand, app):
                 continue
 
+            session = attempt["session"]
+
+            if session not in all_session_ids:
+                raise NarrowException("Missing saved stand session evidence")
+
+            if read_subject(attempt.get("subject")) != identities[session]:
+                raise NarrowException("Saved attempt subject differs from its stand session")
+
+            if session not in session_ids:
+                continue
+
             load = LoadSpec(**attempt["load"])
             clients = attempt["clients"]
             repeat = attempt["repeat"]
@@ -127,9 +149,6 @@ def read_results(path: Path, *, stand: str, app: str | None = None) -> RunMetric
 
             if type(repeat) is not int or not 1 <= repeat <= repeats or (clients, repeat) in seen:
                 raise NarrowException("Invalid or duplicate saved repeat")
-
-            if attempt["session"] not in session_ids:
-                raise NarrowException("Missing saved stand session evidence")
 
             seen.add((clients, repeat))
             selected[clients].append(attempt)

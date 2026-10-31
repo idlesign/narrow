@@ -14,7 +14,7 @@ from ..configuration import LoadSpec
 from ..exceptions import BencherException, NarrowException
 from ..processes import ProcessHandle, run_command
 from ..requests import RequestSpec, snapshot_request, redact_url
-from ..results import SampleResult
+from ..reports.results import SampleResult
 
 BENCHERS = {}
 

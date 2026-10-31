@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 from ..configuration import LoadSpec
 from ..exceptions import BencherException
-from ..results import SampleResult
+from ..reports.results import SampleResult
 from ..requests import RequestSpec, validate_url
 from ._base import Bencher, register_bencher
 
@@ -149,7 +149,7 @@ def parse_oha_report(raw: bytes, load: LoadSpec, *, request: RequestSpec = Reque
         errors=errors,
         deadline_outcomes=deadline_outcomes,
         latency_ms=latency_ms,
-        latency_population="all HTTP responses; latency-corrected" if load.qps else "all HTTP responses",
+        latency_population="all HTTP responses; latency-corrected" if load.latency_correction else "all HTTP responses",
     )
 
 
@@ -173,7 +173,10 @@ class OhaBencher(Bencher):
         argv.extend(["-n", f"{load.requests}"] if load.requests is not None else ["-z", f"{load.duration}s"])
 
         if load.qps is not None:
-            argv.extend(["-q", f"{load.qps}", "--latency-correction"])
+            argv.extend(["-q", f"{load.qps}"])
+
+        if load.latency_correction:
+            argv.append("--latency-correction")
 
         if load.drain:
             argv.append("-w")

@@ -9,6 +9,7 @@ from .configuration import LoadSpec
 from .requests import RequestSpec
 from .runner import Runner, RunOptions
 from .targets import CommandTarget, UrlTarget
+from .targets.subjects import SubjectSpec
 
 MAX_CONFIG_BYTES = 1024 * 1024
 LOAD_FIELDS = {
@@ -41,17 +42,27 @@ def read_path(value: object, *, base: Path, name: str) -> Path:
 def read_target(value: object, *, base: Path, index: int) -> UrlTarget:
     """Construct a URL or argv target without probing it or inspecting the executable."""
     name = f"targets[{index}]"
-    target = read_table(value, name=name, fields={"name", "url"} | COMMAND_FIELDS)
+    target = read_table(value, name=name, fields={"name", "url", "subject"} | COMMAND_FIELDS)
 
     if "name" not in target or "url" not in target:
         raise ValueError(f"{name} requires name and url")
+
+    subject = None
+
+    if "subject" in target:
+        identity = read_table(target["subject"], name=f"{name}.subject", fields={"platform", "revision", "artifact_sha256"})
+
+        if "platform" not in identity:
+            raise ValueError(f"{name}.subject requires platform")
+
+        subject = SubjectSpec(**identity)
 
     if "argv" not in target:
 
         if target.keys() & COMMAND_FIELDS:
             raise ValueError(f"{name}: command settings require argv")
 
-        return UrlTarget(target["url"], name=target["name"])
+        return UrlTarget(target["url"], name=target["name"], subject=subject)
 
     argv = target["argv"]
 
@@ -67,6 +78,7 @@ def read_target(value: object, *, base: Path, index: int) -> UrlTarget:
         target["url"], argv, name=target["name"],
         cwd=read_path(target.get("cwd", "."), base=base, name=f"{name}.cwd"), env=environment,
         ready_path=target.get("ready_path", "/"), ready_status=target.get("ready_status", 200),
+        subject=subject,
     )
 
 def read_run_config(path: Path) -> RunOptions:

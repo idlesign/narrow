@@ -3,8 +3,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from narrow import artifacts, stats_dump, stats_load
-from narrow.artifacts import RunStore
+from narrow import stats_dump, stats_load
+from narrow.reports import artifacts
+from narrow.reports.artifacts import RunStore
 
 
 def test_existing_output_is_never_overwritten(tmp_path: Path) -> None:

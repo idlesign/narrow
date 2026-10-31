@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from narrow import NarrowException, stats_dump, stats_load
-from narrow.artifacts import RunStore
-from narrow.results import SampleResult
+from narrow.reports.artifacts import RunStore
+from narrow.reports.results import SampleResult
 
 
 def test_stats_round_trip(tmp_path: Path) -> None:

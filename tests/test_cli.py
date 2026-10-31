@@ -9,8 +9,8 @@ from click.testing import CliRunner
 
 from narrow import VERSION, NarrowException, cli
 from narrow import stats_load
-from narrow.asv import read_results
-from narrow.plotting import RunReport
+from narrow.reports.asv import read_results
+from narrow.reports.plotting import RunReport
 
 
 @pytest.mark.parametrize(
@@ -300,9 +300,9 @@ def test_granian_config_shares_runner_checkpoint_asv_and_report(
     assert (output / "report.html").is_file()
     assert read_results(output, stand="granian", app="py")[4]["rps"] == 10
     assert read_results(output, stand="granian_ssl", app="py")[4]["rps"] == 10
-    assert [trace.name for trace in RunReport(saved).create_figure().data if trace.showlegend] == [
-        "S1 · granian/py", "S2 · granian_ssl/py",
-    ]
+    legends = [trace for trace in RunReport(saved).create_figure().data if trace.showlegend]
+    assert [trace.meta["target"] for trace in legends] == ["granian", "granian_ssl"]
+    assert [trace.meta["subject"]["platform"] for trace in legends] == ["granian", "granian"]
     assert len(run_environment.handles) == 2
 
     for handle in run_environment.handles:

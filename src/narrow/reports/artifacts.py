@@ -6,15 +6,13 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
 
-from .configuration import Settings
-from .exceptions import NarrowException
+from ..configuration import Settings
+from ..exceptions import NarrowException
+from ..requests import RequestSpec
 from .results import SampleResult
 
 if TYPE_CHECKING:
-    from .targets import Target
-
-from .requests import RequestSpec
-
+    from ..targets import Target
 
 def stats_dump(stats: dict, path: Path | None = None) -> None:
     """Atomically replace one checkpoint; never merge unrelated runs or suppress errors."""

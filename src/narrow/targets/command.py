@@ -1,70 +1,27 @@
-"""HTTP endpoints: external, foreground commands and existing built-in stands."""
+"""Foreground command ownership and bounded loopback readiness."""
 
 import hashlib
 import json
 import logging
 import os
-import re
 import shutil
 import sys
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from importlib.metadata import PackageNotFoundError
 from pathlib import Path
-from typing import ContextManager, Protocol
 from urllib.parse import urlsplit
 
-from .apps import APPS
-from .configuration import get_ssl_ca_path
-from .exceptions import NarrowException
-from .processes import ProcessHandle
-from .readiness import check_available, split_address
-from .requests import RequestSpec, redact_url, validate_url
-from .stands import STANDS
+from ..exceptions import NarrowException
+from ..processes import ProcessHandle
+from ..readiness import check_available, split_address
+from ..requests import RequestSpec, redact_url
+from .subjects import SubjectSpec
+from .url import UrlTarget
 
 LOG = logging.getLogger(__name__)
 PUBLIC_ENV_SWITCHES = frozenset((
     "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE", "PYTHONUNBUFFERED", "PYTHONSAFEPATH", "PYTHONUTF8",
 ))
-
-class UrlTarget:
-    """An explicit external endpoint; narrow neither starts nor stops its server."""
-
-    ownership = "external"
-    app_alias = None
-    ca_file = None
-
-    def __init__(self, url: str, *, name: str = "custom") -> None:
-        validate_url(url)
-
-        if not isinstance(name, str) or not re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", name):
-            raise ValueError("Target name must contain 1..64 letters, digits, dots, underscores or hyphens")
-
-        self.url = url
-        self.alias = name
-
-    def describe(self) -> dict:
-        """Describe selection without performing I/O or claiming server provenance."""
-        return {
-            "name": self.alias, "app": self.app_alias, "ownership": self.ownership,
-            "url": redact_url(self.url), "url_sha256": hashlib.sha256(self.url.encode()).hexdigest(),
-        }
-
-    def prepare(self) -> dict:
-        """External server identity remains unverified; do not issue a hidden probe."""
-        return self.describe()
-
-    @contextmanager
-    def setup(self, *, timeout: float, ca_file: Path | None = None) -> Iterator["UrlTarget"]:
-        """Borrow an endpoint without allocating server resources."""
-        yield self
-
-    def check_running(self) -> None:
-        """The bounded HTTP generator observes this endpoint, not a foreign PID."""
-
-    def get_evidence(self) -> list[dict]:
-        """There are no owned server processes to inspect or clean up."""
-        return []
 
 class CommandTarget(UrlTarget):
     """Own a foreground argv and verify its loopback HTTP readiness with a hard deadline."""
@@ -74,8 +31,9 @@ class CommandTarget(UrlTarget):
     def __init__(
         self, url: str, argv: Sequence[str], *, name: str = "custom", cwd: Path | None = None,
         env: Mapping[str, str] | None = None, ready_path: str = "/", ready_status: int = 200,
+        subject: SubjectSpec | None = None,
     ) -> None:
-        super().__init__(url, name=name)
+        super().__init__(url, name=name, subject=subject)
         split_address(urlsplit(url).netloc)
         RequestSpec(path=ready_path, expected_status=ready_status)
 
@@ -257,92 +215,3 @@ class CommandTarget(UrlTarget):
             "output_truncated": self.output_truncated, "readiness": self.probe,
             "artifacts_redacted": files != redacted, "files": redacted,
         }]
-
-class StandTarget:
-    """Use existing stand lifecycle through the same endpoint interface."""
-
-    ownership = "owned"
-
-    def __init__(self, alias: str, app_alias: str | None) -> None:
-        self.stand = STANDS[alias]()
-        self.alias = alias
-        self.app_alias = app_alias if self.stand.uses_app else None
-        self.app = APPS[self.app_alias]() if self.app_alias is not None else None
-        self.url = f"{self.stand.protocol}://{self.stand.address}/"
-        self.ca_file = Path(get_ssl_ca_path()) if self.stand.protocol == "https" else None
-
-    def describe(self) -> dict:
-        """Describe the built-in topology without inspecting installed tools."""
-        return {"name": self.alias, "app": self.app_alias, "ownership": self.ownership, "url": self.url}
-
-    def prepare(self) -> dict:
-        """Verify only tools and application selected for this topology."""
-        self.stand.check_tools()
-        servers = {}
-        current = self.stand
-
-        while current is not None:
-            name = current.prc_name
-            binary = Path(current.get_executable()).resolve()
-            servers[name] = {
-                "path": f"{binary}", "version": current.get_version(), "sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-            }
-            current.prc_name = f"{binary}"
-            current = current.child
-
-        apps = {}
-
-        if self.app is not None:
-
-            try:
-                version = self.app.get_version()
-
-            except PackageNotFoundError as error:
-                raise NarrowException(f"Application {self.app_alias} is not installed") from error
-
-            entrypoint = Path(self.app.get_entrypoint_path())
-            apps[self.app_alias] = {
-                "version": version, "entrypoint_sha256": hashlib.sha256(entrypoint.read_bytes()).hexdigest(),
-            }
-
-        return {**self.describe(), "servers": servers, "apps": apps}
-
-    @contextmanager
-    def setup(self, *, timeout: float, ca_file: Path | None = None) -> Iterator["StandTarget"]:
-        """Delegate built-in application readiness and owned cleanup to the stand."""
-
-        with self.stand.setup(self.app, timeout=timeout):
-            yield self
-
-    def check_running(self) -> None:
-        """Require the complete built-in process topology to remain alive."""
-        self.stand.check_running()
-
-    def get_evidence(self) -> list[dict]:
-        """Flatten server diagnostics without introducing another process manager."""
-        result = []
-        current = self.stand
-
-        while current is not None:
-            result.append({
-                "alias": current.alias, "argv": current.argv, "cleanup_error": current.cleanup_error,
-                "output_truncated": current.output_truncated,
-                "files": {**{name: contents.encode() for name, contents in current.configurations.items()},
-                          "stdout.bin": current.output[0], "stderr.bin": current.output[1]},
-            })
-            current = current.child
-
-        return result
-
-class Target(Protocol):
-    alias: str
-    app_alias: str | None
-    url: str
-    ownership: str
-    ca_file: Path | None
-
-    def describe(self) -> dict: ...
-    def prepare(self) -> dict: ...
-    def setup(self, *, timeout: float, ca_file: Path | None = None) -> ContextManager: ...
-    def check_running(self) -> None: ...
-    def get_evidence(self) -> list[dict]: ...

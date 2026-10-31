@@ -9,12 +9,13 @@ from unittest.mock import Mock
 import pytest
 from asv_runner.discovery import disc_benchmarks
 
-from narrow import asv
-from narrow.artifacts import stats_dump
+from narrow.reports import asv
+from narrow.reports.artifacts import stats_dump
 from narrow.configuration import LoadSpec
 from narrow.exceptions import NarrowException
 from narrow.processes import ProcessHandle
-from narrow.results import SampleResult
+from narrow.reports.results import SampleResult
+from narrow.targets.subjects import SubjectSpec
 
 @pytest.fixture
 def saved_run() -> dict:
@@ -62,6 +63,13 @@ def test_require_explicit_saved_stand_and_application(saved_run: dict, tmp_path:
 
     with pytest.raises(NarrowException, match="No saved stand/application"):
         asv.read_results(tmp_path, stand=stand, app=app)
+
+def test_attempt_cannot_silently_claim_another_subject_than_its_session(saved_run: dict, tmp_path: Path) -> None:
+    saved_run["attempts"][0]["subject"] = SubjectSpec("different-runtime", "revision").serialize()
+    stats_dump(saved_run, tmp_path / "run.json")
+
+    with pytest.raises(NarrowException, match="attempt subject differs"):
+        asv.read_results(tmp_path, stand="uwsgi", app="py")
 
 @pytest.mark.parametrize(("changes", "fraction", "latency"), [
     ({"responses": 90, "successful_responses": 80, "errors": {"timeout": 10}, "rps": 80}, 0.2, 0.03),

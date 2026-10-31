@@ -7,10 +7,10 @@ import click
 from click.core import ParameterSource
 
 from . import APPS, BENCHERS, STANDS, VERSION
-from .artifacts import stats_load
+from .reports.artifacts import stats_load
 from .configuration import LoadSpec, Settings
 from .exceptions import NarrowException
-from .plotting import plot
+from .reports.plotting import plot
 from .runner import Runner, RunOptions
 from .requests import RequestSpec
 from .run_config import read_run_config

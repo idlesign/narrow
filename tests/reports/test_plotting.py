@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from narrow import NarrowException, plotting
+from narrow import NarrowException, SubjectSpec
+from narrow.reports import plotting
 
 class ReportParser(HTMLParser):
 
@@ -162,6 +163,23 @@ def test_servers_share_panels_but_keep_distinct_colors_and_legend_groups(saved_r
     assert {trace.legendgroup for trace in figure.data[8:]} == {"S2"}
     assert figure.data[8].meta["higher_is_better"] is True
     assert all(trace.meta["higher_is_better"] is False for trace in figure.data[10:])
+
+def test_same_named_builds_are_separate_series_even_with_unchanged_revision(saved_run: dict) -> None:
+    identities = [SubjectSpec("server", "same-label", {"runtime": checksum * 64}).serialize() for checksum in ("a", "b")]
+    saved_run["attempts"] = [
+        {**saved_run["attempts"][0], "subject": subject, "rps": rate}
+        for subject, rate in zip(identities, (100, 300), strict=True)
+    ]
+
+    figure = plotting.RunReport(saved_run).create_figure()
+
+    assert len(figure.data) == 16
+    assert figure.data[0].y == (100,) and figure.data[8].y == (300,)
+    assert figure.data[0].meta["subject"]["fingerprint"] == identities[0]["fingerprint"]
+    assert figure.data[8].meta["subject"]["fingerprint"] == identities[1]["fingerprint"]
+    assert identities[0]["fingerprint"][:12] in figure.data[0].name
+    assert identities[1]["fingerprint"][:12] in figure.data[8].name
+    assert "server@same-label" in figure.data[0].name
 
 def test_external_target_cleanup_is_not_claimed(saved_run: dict) -> None:
     saved_run["stands"] = [{"stand": "nginx_static", "session": 0, "ownership": "external", "processes": []}]

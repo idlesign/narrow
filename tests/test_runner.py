@@ -4,13 +4,13 @@ from unittest.mock import Mock
 
 import pytest
 
-from narrow import APPS, NarrowException, runner, stats_load
+from narrow import APPS, NarrowException, SubjectSpec, runner, stats_load
 from narrow.configuration import LoadSpec
 from narrow.requests import RequestSpec
-from narrow.results import SampleResult
+from narrow.reports.results import SampleResult
 from narrow.runner import Runner, RunOptions
 from narrow.targets import UrlTarget
-from narrow.asv import read_results
+from narrow.reports.asv import read_results
 
 
 @pytest.mark.parametrize("stand_alias", ["nginx_static", "nginx_ssl_static"])
@@ -187,3 +187,45 @@ def test_bad_input_is_checkpointed_before_any_target_starts(tmp_path: Path, run_
     assert stats_load(tmp_path / "run")["status"] == "failed"
     run_environment.bencher.run_once.assert_not_called()
     assert run_environment.handles == []
+
+def test_same_named_revisions_share_executor_but_never_pool_asv_metrics(
+    tmp_path: Path, run_environment: SimpleNamespace,
+) -> None:
+    subjects = tuple(SubjectSpec("server", "unchanged-version", {"runtime": checksum * 64}) for checksum in ("a", "b"))
+    options = RunOptions(
+        targets=tuple(UrlTarget("http://example.test/", name="server", subject=subject) for subject in subjects),
+        loads=(LoadSpec(requests=2),),
+    )
+    run_environment.bencher.run_once.side_effect = [
+        SampleResult(1, status="ok", rps=rate, responses=2, successful_responses=2, latency_ms={"p99": rate})
+        for rate in (10.0, 20.0)
+    ]
+
+    result = Runner(options).run(tmp_path / "run")
+
+    assert result["status"] == "complete"
+    assert [target["subject"] for target in result["meta"]["targets"]] == [subject.serialize() for subject in subjects]
+    assert [target["subject"] for target in result["stands"]] == [subject.serialize() for subject in subjects]
+    assert [attempt["subject"] for attempt in result["attempts"]] == [subject.serialize() for subject in subjects]
+
+    with pytest.raises(NarrowException, match="Different saved subjects"):
+        read_results(tmp_path / "run", stand="server")
+
+    assert [
+        read_results(tmp_path / "run", stand="server", subject=subject.serialize()["fingerprint"])[1]["rps"]
+        for subject in subjects
+    ] == [10, 20]
+    assert run_environment.handles == []
+
+def test_same_named_same_subject_is_rejected_before_starting(tmp_path: Path, run_environment: SimpleNamespace) -> None:
+    subject = SubjectSpec("server", "revision")
+    options = RunOptions(
+        targets=(UrlTarget("http://example.test/", subject=subject), UrlTarget("http://other.test/", subject=subject)),
+        loads=(LoadSpec(requests=2),),
+    )
+
+    with pytest.raises(NarrowException, match="Duplicate target"):
+        Runner(options).run(tmp_path / "run")
+
+    run_environment.bencher.prepare.assert_not_called()
+    assert not (tmp_path / "run").exists()

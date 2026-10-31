@@ -77,6 +77,7 @@ class LoadSpec:
     connect_timeout: float = 2.0
     keepalive: bool = True
     drain: bool = True
+    latency_correction: bool | None = None
 
     def __post_init__(self) -> None:
 
@@ -100,3 +101,9 @@ class LoadSpec:
 
         if type(self.keepalive) is not bool or type(self.drain) is not bool:
             raise ValueError("keepalive and drain must be boolean")
+
+        if self.latency_correction is None:
+            object.__setattr__(self, "latency_correction", self.qps is not None)
+
+        if type(self.latency_correction) is not bool or self.latency_correction and self.qps is None:
+            raise ValueError("latency_correction must be boolean and requires QPS when enabled")

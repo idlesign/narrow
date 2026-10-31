@@ -1,29 +1,11 @@
 import json
-from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
 
 import pytest
 
-from narrow import targets
 from narrow.exceptions import NarrowException
 from narrow.processes import CommandResult
-from narrow.targets import CommandTarget, StandTarget, UrlTarget
-
-def test_external_url_does_not_own_or_probe_a_server(monkeypatch: pytest.MonkeyPatch) -> None:
-    start = Mock(side_effect=AssertionError("foreign server must not be touched"))
-    monkeypatch.setattr(targets, "ProcessHandle", start)
-    target = UrlTarget("https://example.test/api?token=PRIVATE", name="external")
-
-    metadata = target.prepare()
-
-    with target.setup(timeout=1):
-        target.check_running()
-
-    assert metadata["ownership"] == "external"
-    assert "PRIVATE" not in repr(metadata)
-    assert target.get_evidence() == []
-    start.assert_not_called()
+from narrow.targets import CommandTarget
 
 def test_command_preserves_argv_cwd_and_private_environment(command_environment: SimpleNamespace) -> None:
     environment = command_environment
@@ -214,17 +196,3 @@ def test_command_rejects_nonlocal_listener_and_bad_environment() -> None:
 
     with pytest.raises(ValueError, match="environment"):
         CommandTarget("http://127.0.0.1:8080/", ("server",), env={"A=B": "value"})
-
-def test_builtin_target_keeps_existing_topology(run_environment: SimpleNamespace) -> None:
-    target = StandTarget("nginx_ssl_static", None)
-
-    metadata = target.prepare()
-
-    with target.setup(timeout=1):
-        target.check_running()
-
-    assert metadata["ownership"] == "owned"
-    assert "nginx" in metadata["servers"]
-    assert target.ca_file.is_file()
-    assert target.get_evidence()[0]["files"]["stdout.bin"] == b"server out"
-    run_environment.handles[0].stop.assert_called_once()

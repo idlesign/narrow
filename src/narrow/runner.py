@@ -1,5 +1,6 @@
 """Sequential HTTP runs with explicit workloads, bounded phases and durable evidence."""
 
+import json
 import logging
 import math
 import platform
@@ -10,7 +11,7 @@ from pathlib import Path
 from time import monotonic
 
 from .apps import APPS
-from .artifacts import RunStore
+from .reports.artifacts import RunStore
 from .benchers import BENCHERS
 from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
@@ -103,7 +104,9 @@ class Runner:
             StandTarget(alias, app_alias) for alias in options.stands
             for app_alias in (options.apps if STANDS[alias].uses_app else (None,))
         ] + list(options.targets)
-        identities = [(target.alias, target.app_alias) for target in targets]
+        identities = [
+            (target.alias, target.app_alias, json.dumps(target.describe().get("subject"), sort_keys=True)) for target in targets
+        ]
 
         if len(set(identities)) != len(identities):
             raise NarrowException("Duplicate target name/application")
@@ -186,7 +189,10 @@ class Runner:
 
             for target in targets:
                 request = replace(base_request, ca_file=base_request.ca_file or target.ca_file)
-                identity = {"stand": target.alias, "app": target.app_alias, "session": len(store.data["stands"])}
+                identity = {
+                    "stand": target.alias, "app": target.app_alias, "session": len(store.data["stands"]),
+                    "subject": target.describe().get("subject"),
+                }
 
                 def take_sample(load: LoadSpec, phase: str, repeat: int) -> None:
                     remaining = deadline - monotonic() - CLEANUP_RESERVE
