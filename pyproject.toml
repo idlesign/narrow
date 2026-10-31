@@ -11,19 +11,20 @@ license-files = ["LICENSE"]
 requires-python = ">=3.12"
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "uwsgi",
-    "uwsgiconf>=0.14.2",
     "click",
     "plotly",
     "envbox",
     "colorhash",
 ]
+
+[project.optional-dependencies]
+uwsgi = ["uwsgi", "uwsgiconf>=0.14.2"]
 
 [project.urls]
 Homepage = "https://github.com/idlesign/narrow"
@@ -49,6 +50,10 @@ linters = [
 tests = [
     "pytest>=8,<10",
     "pytest-datafixtures",
+    "uwsgiconf>=0.14.2",
+    { include-group = "frameworks" },
+]
+frameworks = [
     "bottle",
     "cherrypy",
     "django",
