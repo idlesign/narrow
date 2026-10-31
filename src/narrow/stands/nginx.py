@@ -48,8 +48,11 @@ class NginxBase(Stand):
             access_log {access_log};
             client_body_temp_path {body_path};
             uwsgi_temp_path {uwsgi_path};
+            proxy_temp_path {quote_path(f"{self.resources.path}/proxy-temp")};
+            fastcgi_temp_path {quote_path(f"{self.resources.path}/fastcgi-temp")};
+            scgi_temp_path {quote_path(f"{self.resources.path}/scgi-temp")};
             server {{
-                listen {self.address}{tls_option} backlog={Settings.MAX_CONNECTIONS};
+                listen {self.address}{tls_option} backlog={Settings.LISTEN_BACKLOG};
                 server_name localhost;
                 {tls}
                 location / {{ {self.location_commands} }}

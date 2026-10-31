@@ -7,7 +7,7 @@ import pytest
 from narrow.benchers import oha
 from narrow.benchers import _base as base
 from narrow.benchers.oha import OhaBencher, parse_oha_report
-from narrow.configuration import LoadSpec
+from narrow.configuration import LoadSpec, get_ssl_ca_path
 from narrow.exceptions import BencherException
 from narrow.processes import CommandResult
 
@@ -67,7 +67,7 @@ def test_build_explicit_http_policy_without_io(monkeypatch: pytest.MonkeyPatch) 
     assert argv[argv.index("-z") + 1] == "1.5s"
     assert "--latency-correction" in argv
     assert "--disable-keepalive" in argv
-    assert "--cacert" in argv
+    assert argv[argv.index("--cacert") + 1] == get_ssl_ca_path()
     assert "--insecure" not in argv
     prepare.assert_not_called()
 

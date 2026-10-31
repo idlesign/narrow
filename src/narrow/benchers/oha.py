@@ -4,7 +4,7 @@ import json
 import math
 from urllib.parse import urlsplit
 
-from ..configuration import LoadSpec, get_ssl_tuple
+from ..configuration import LoadSpec, get_ssl_ca_path
 from ..exceptions import BencherException
 from ..results import SampleResult
 from ._base import Bencher, register_bencher
@@ -162,7 +162,7 @@ class OhaBencher(Bencher):
             argv.append("--disable-keepalive")
 
         if urlsplit(url).scheme == "https":
-            argv.extend(["--cacert", get_ssl_tuple()[0]])
+            argv.extend(["--cacert", get_ssl_ca_path()])
 
         argv.append(url)
         return argv

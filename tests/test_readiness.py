@@ -1,11 +1,13 @@
 import ssl
+from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 
 from narrow import NarrowException, readiness
-from narrow.configuration import get_ssl_tuple
+from narrow.configuration import get_ssl_ca_path, get_ssl_tuple
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +36,7 @@ def test_readiness_checks_response_and_processes(protocol: str, monkeypatch: pyt
         context = constructor.call_args.kwargs["context"]
         assert context.check_hostname
         assert context.verify_mode == ssl.CERT_REQUIRED
+        assert context.get_ca_certs(binary_form=True) == [ssl.PEM_cert_to_DER_cert(Path(get_ssl_ca_path()).read_text())]
 
 
 def test_wrong_response_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -51,20 +54,26 @@ def test_wrong_response_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     assert connection.request.call_count == 2
 
 
-def test_occupied_port_is_not_a_ready_stand(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("occupied", (False, True))
+def test_port_check_allows_reuse_but_rejects_listeners(occupied: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     probe = Mock()
     probe.__enter__ = Mock(return_value=probe)
     probe.__exit__ = Mock(return_value=False)
-    probe.bind.side_effect = OSError("address already in use")
+    probe.bind.side_effect = OSError("address already in use") if occupied else None
     monkeypatch.setattr(readiness.socket, "socket", Mock(return_value=probe))
 
-    with pytest.raises(NarrowException, match="unavailable"):
+    with pytest.raises(NarrowException, match="unavailable") if occupied else nullcontext():
         readiness.check_available("127.0.0.1:8000")
 
+    probe.setsockopt.assert_called_once_with(readiness.socket.SOL_SOCKET, readiness.socket.SO_REUSEADDR, 1)
+    probe.bind.assert_called_once_with(("127.0.0.1", 8000))
 
-def test_bundled_certificate_covers_loopback_names() -> None:
-    context = ssl.create_default_context(cafile=get_ssl_tuple()[0])
-    certificate = context.get_ca_certs()[0]
 
-    assert ("DNS", "localhost") in certificate["subjectAltName"]
-    assert ("IP Address", "127.0.0.1") in certificate["subjectAltName"]
+def test_bundled_tls_uses_a_separate_trust_anchor() -> None:
+    certificate, key = get_ssl_tuple()
+    context = ssl.create_default_context(cafile=get_ssl_ca_path())
+
+    context.load_cert_chain(certificate, key)
+
+    assert context.cert_store_stats()["x509_ca"] == 1
+    assert ssl.PEM_cert_to_DER_cert(Path(certificate).read_text()) not in context.get_ca_certs(binary_form=True)

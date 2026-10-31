@@ -142,6 +142,7 @@ class Runner:
             "server_settings": {
                 "workers": Settings.WORKERS, "threads": Settings.THREADS,
                 "max_connections": Settings.MAX_CONNECTIONS, "access_logs": Settings.LOG_WRITE,
+                "listen_backlog": Settings.LISTEN_BACKLOG,
             },
             "legacy_timeout_policy": "process watchdog only" if options.bencher != "oha" else None,
         })

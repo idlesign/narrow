@@ -8,7 +8,7 @@ from time import monotonic, sleep
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-from .configuration import get_ssl_tuple
+from .configuration import get_ssl_ca_path
 from .exceptions import NarrowException
 
 if TYPE_CHECKING:
@@ -34,6 +34,8 @@ def check_available(address: str) -> None:
     try:
 
         with socket.socket(family, socket.SOCK_STREAM) as probe:
+            # TIME_WAIT from a stopped stand is not an active listener.
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             probe.bind((host, port))
 
     except OSError as error:
@@ -69,7 +71,7 @@ def wait_ready(stand: "Stand", *, timeout: float, attempts: int = 8) -> None:
                 options = {"timeout": min(remaining, 0.25)}
 
                 if stand.protocol == "https":
-                    options["context"] = ssl.create_default_context(cafile=get_ssl_tuple()[0])
+                    options["context"] = ssl.create_default_context(cafile=get_ssl_ca_path())
                     connection = http.client.HTTPSConnection(host, port, **options)
 
                 else:

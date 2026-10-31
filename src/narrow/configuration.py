@@ -11,6 +11,7 @@ class SettingsDefinition(SettingsBase):
     THREADS = 1
     LOG_WRITE = False
     MAX_CONNECTIONS = 8191
+    LISTEN_BACKLOG = 128
     FILENAME_STATS_PLOT = "narrow-stats.html"
     FILENAME_STATS_DUMP = "narrow-stats.json"
 
@@ -22,6 +23,11 @@ DIR_PACKAGE = Path(__file__).resolve().parent
 def get_ssl_tuple() -> tuple[str, str]:
     """Return the deliberately public test certificate/key, never production secrets."""
     return get_path_in_package("files/test.cer"), get_path_in_package("files/testnopass.pem")
+
+
+def get_ssl_ca_path() -> str:
+    """Return the public test CA, separate from the server certificate."""
+    return get_path_in_package("files/test-ca.cer")
 
 
 def get_path_in_package(filename: str) -> str:

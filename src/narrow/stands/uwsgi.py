@@ -39,7 +39,7 @@ class Uwsgi(Stand):
             params_python={"python_home": sys.prefix},
             workers=Settings.WORKERS, threads=Settings.THREADS, log_into="/dev/stderr",
         ).networking.register_socket(listener).networking.set_basic_params(
-            queue_size=Settings.MAX_CONNECTIONS,
+            queue_size=Settings.LISTEN_BACKLOG,
         ).logging.set_basic_params(no_requests=not Settings.LOG_WRITE)
 
     @property

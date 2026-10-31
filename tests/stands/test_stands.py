@@ -12,13 +12,23 @@ from narrow.stands._base import Stand
 def test_static_nginx_config(prepared_stand: Callable[[str], Stand], monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(Settings, "WORKERS", 3)
     monkeypatch.setattr(Settings, "MAX_CONNECTIONS", 1024)
+    monkeypatch.setattr(Settings, "LISTEN_BACKLOG", 256)
 
     config = prepared_stand("nginx_static").get_config()
 
     assert "worker_processes 3;" in config
     assert "worker_connections 1024;" in config
-    assert "listen 127.0.0.1:8001 backlog=1024;" in config
+    assert "listen 127.0.0.1:8001 backlog=256;" in config
     assert "return 200 'Hello there!';" in config
+
+
+@pytest.mark.parametrize("module", ("proxy", "fastcgi", "scgi"))
+def test_nginx_temp_paths_are_private(prepared_stand: Callable[[str], Stand], module: str) -> None:
+    stand = prepared_stand("nginx_static")
+
+    config = stand.get_config()
+
+    assert f"{module}_temp_path \"{stand.resources.path}/{module}-temp\";" in config
 
 
 def test_tls_proxy_config_uses_packaged_certificate(prepared_stand: Callable[[str], Stand]) -> None:
@@ -35,6 +45,7 @@ def test_tls_proxy_config_uses_packaged_certificate(prepared_stand: Callable[[st
 
 
 def test_uwsgi_config_points_to_packaged_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Settings, "LISTEN_BACKLOG", 256)
     stand = STANDS["uwsgi"]()
     app = APPS["py"]()
     monkeypatch.setattr(stand, "app", app)
@@ -46,6 +57,7 @@ def test_uwsgi_config_points_to_packaged_app(monkeypatch: pytest.MonkeyPatch) ->
     assert "127.0.0.1:8002" in configuration
     assert sys.prefix in configuration
     assert "disable-logging = true" in configuration
+    assert "listen = 256" in configuration
 
 
 def test_static_tls_is_really_https(prepared_stand: Callable[[str], Stand]) -> None:
