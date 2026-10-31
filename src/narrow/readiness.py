@@ -4,6 +4,10 @@ import http.client
 import ipaddress
 import socket
 import ssl
+import json
+import sys
+from collections.abc import Callable
+from pathlib import Path
 from time import monotonic, sleep
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
@@ -42,60 +46,93 @@ def check_available(address: str) -> None:
         raise NarrowException(f"Stand address {address} is unavailable: {error}") from error
 
 
-def wait_ready(stand: "Stand", *, timeout: float, attempts: int = 8) -> None:
-    """Require live owned processes and the expected response, with bounded HTTP probes."""
+def _wait_for_probe(
+    probe: Callable[[float], None], *, timeout: float, attempts: int,
+    check_running: Callable[[], None] | None, title: str,
+) -> int:
     deadline = monotonic() + timeout
     last_error = "No readiness response"
 
-    for _attempt in range(attempts):
-        stand.check_running()
+    for attempt in range(1, attempts + 1):
+
+        if check_running is not None:
+            check_running()
+
         remaining = deadline - monotonic()
 
         if remaining <= 0:
             break
 
-        connection = None
-
         try:
+            probe(min(remaining, 0.25))
 
-            if stand.protocol == "uwsgi":
-                family = socket.AF_UNIX if stand.unix else socket.AF_INET
-                target = stand.address if stand.unix else split_address(stand.address)
+            if check_running is not None:
+                check_running()
 
-                with socket.socket(family, socket.SOCK_STREAM) as probe:
-                    probe.settimeout(min(remaining, 0.25))
-                    probe.connect(target)
-
-            else:
-                host, port = split_address(stand.address)
-                options = {"timeout": min(remaining, 0.25)}
-
-                if stand.protocol == "https":
-                    options["context"] = ssl.create_default_context(cafile=get_ssl_ca_path())
-                    connection = http.client.HTTPSConnection(host, port, **options)
-
-                else:
-                    connection = http.client.HTTPConnection(host, port, **options)
-
-                connection.request("GET", "/", headers={"Connection": "close"})
-                response = connection.getresponse()
-                body = response.read(1024)
-                expected = stand.app.response_body if stand.uses_app else b"Hello there!"
-
-                if response.status != 200 or body != expected:
-                    raise NarrowException("Unexpected readiness status or response body")
-
-            stand.check_running()
-            return
+            return attempt
 
         except (OSError, http.client.HTTPException, NarrowException) as error:
             last_error = f"{error}"
 
-        finally:
-
-            if connection is not None:
-                connection.close()
-
         sleep(min(0.1, max(0, deadline - monotonic())))
 
-    raise NarrowException(f"Stand {stand.alias} did not become ready: {last_error}")
+    raise NarrowException(f"{title} did not become ready: {last_error}")
+
+def wait_http_ready(
+    url: str, *, timeout: float, ca_file: Path | None = None, expected_status: int = 200,
+    expected_body: bytes | None = None, attempts: int = 8, check_running: Callable[[], None] | None = None,
+) -> int:
+    """Probe a numeric loopback endpoint with GET, independently of the measured request."""
+    parsed = urlsplit(url)
+    host, port = split_address(parsed.netloc)
+
+    def probe(connection_timeout: float) -> None:
+        options = {"timeout": connection_timeout}
+
+        if parsed.scheme == "https":
+            options["context"] = ssl.create_default_context(cafile=ca_file)
+            connection = http.client.HTTPSConnection(host, port, **options)
+
+        else:
+            connection = http.client.HTTPConnection(host, port, **options)
+
+        try:
+            path = f"{parsed.path or '/'}{f'?{parsed.query}' if parsed.query else ''}"
+            connection.request("GET", path, headers={"Connection": "close"})
+            response = connection.getresponse()
+            body = response.read(len(expected_body) + 1) if expected_body is not None else None
+
+            if response.status != expected_status or (expected_body is not None and body != expected_body):
+                raise NarrowException("Unexpected readiness status or response body")
+
+        finally:
+            connection.close()
+
+    return _wait_for_probe(probe, timeout=timeout, attempts=attempts, check_running=check_running, title="HTTP endpoint")
+
+def wait_ready(stand: "Stand", *, timeout: float, attempts: int = 8) -> None:
+    """Check built-in HTTP response identity or the internal uWSGI socket."""
+
+    if stand.protocol != "uwsgi":
+        wait_http_ready(
+            f"{stand.protocol}://{stand.address}/", timeout=timeout, attempts=attempts,
+            ca_file=get_ssl_ca_path() if stand.protocol == "https" else None,
+            expected_body=stand.app.response_body if stand.uses_app else b"Hello there!", check_running=stand.check_running,
+        )
+        return
+
+    def probe(connection_timeout: float) -> None:
+        family = socket.AF_UNIX if stand.unix else socket.AF_INET
+        address = stand.address if stand.unix else split_address(stand.address)
+
+        with socket.socket(family, socket.SOCK_STREAM) as connection:
+            connection.settimeout(connection_timeout)
+            connection.connect(address)
+
+    _wait_for_probe(probe, timeout=timeout, attempts=attempts, check_running=stand.check_running, title=f"Stand {stand.alias}")
+
+def run_probe() -> None:
+    """Private subprocess entry: a parent ProcessHandle enforces the hard HTTP deadline."""
+    options = json.loads(sys.argv[1])
+    attempts = wait_http_ready(**options)
+    print(json.dumps({"attempts": attempts}))

@@ -3,11 +3,12 @@
 import os
 import signal
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from threading import Thread
 from time import monotonic, sleep
 from typing import BinaryIO
+from pathlib import Path
 
 from .exceptions import NarrowException
 
@@ -25,7 +26,10 @@ class CommandResult:
 class ProcessHandle:
     """Own a foreground process group; never signal a reaped PID or process name."""
 
-    def __init__(self, argv: Sequence[str], *, output_limit: int = 2 * 1024 * 1024) -> None:
+    def __init__(
+        self, argv: Sequence[str], *, output_limit: int = 2 * 1024 * 1024,
+        cwd: Path | None = None, env: Mapping[str, str] | None = None,
+    ) -> None:
 
         if not argv or isinstance(argv, str) or any(not isinstance(arg, str) for arg in argv):
             raise ValueError("argv must be a nonempty sequence of strings")
@@ -34,6 +38,8 @@ class ProcessHandle:
             raise ValueError("output_limit must be positive")
 
         self.argv = tuple(argv)
+        self.cwd = cwd
+        self.env = dict(env) if env is not None else None
         self.output_limit = output_limit
         self._process: subprocess.Popen | None = None
         self._threads: list[Thread] = []
@@ -60,7 +66,7 @@ class ProcessHandle:
         try:
             self._process = subprocess.Popen(
                 self.argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE, shell=False, start_new_session=True,
+                stderr=subprocess.PIPE, shell=False, start_new_session=True, cwd=self.cwd, env=self.env,
             )
 
         except OSError as error:

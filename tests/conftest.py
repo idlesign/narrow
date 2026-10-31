@@ -8,6 +8,10 @@ import pytest
 from narrow import STANDS, runner
 from narrow.benchers.oha import OhaBencher
 from narrow.configuration import LoadSpec
+from narrow.requests import RequestSpec
+from narrow import targets
+from narrow.processes import CommandResult
+from narrow.targets import CommandTarget
 from narrow.results import SampleResult
 from narrow.stands import _base, nginx, uwsgi
 from narrow.stands._base import Stand
@@ -47,10 +51,11 @@ def run_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNa
         handles.append(handle)
         return handle
 
-    def measure(url: str, load: LoadSpec, *, timeout: float) -> SampleResult:
+    def measure(url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
         return SampleResult(
             load.clients, status="ok", rps=10.0, responses=load.requests,
             successful_responses=load.requests, raw_stdout=b"generator JSON", raw_stderr=b"diagnostics",
+            request=request.serialize(),
         )
 
     monkeypatch.setattr(_base.shutil, "which", Mock(return_value=f"{binary}"))
@@ -66,3 +71,20 @@ def run_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNa
     monkeypatch.setattr(runner, "BENCHERS", {"oha": lambda: bencher})
     monkeypatch.setattr(runner, "monotonic", lambda: 0.0)
     return SimpleNamespace(bencher=bencher, handles=handles, ready=ready)
+
+@pytest.fixture
+def command_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    binary = tmp_path / "server"
+    binary.write_bytes(b"never executed")
+    binary.chmod(0o700)
+    server = Mock(collect_output=Mock(return_value=(b"server output", b"PRIVATE")), output_truncated=False)
+    probe = Mock(
+        wait=Mock(return_value=CommandResult((), 0, b'{"attempts":1}', b"", 0.1)),
+        collect_output=Mock(return_value=(b'{"attempts":1}', b"")), output_truncated=False,
+    )
+    create = Mock(side_effect=[server, probe])
+    available = Mock()
+    monkeypatch.setattr(targets, "ProcessHandle", create)
+    monkeypatch.setattr(targets, "check_available", available)
+    target = CommandTarget("http://127.0.0.1:8080/api", ("./server", "--flag"), cwd=tmp_path, env={"SECRET": "PRIVATE"})
+    return SimpleNamespace(target=target, server=server, probe=probe, create=create, available=available, binary=binary)

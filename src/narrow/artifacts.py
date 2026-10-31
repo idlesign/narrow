@@ -11,7 +11,9 @@ from .exceptions import NarrowException
 from .results import SampleResult
 
 if TYPE_CHECKING:
-    from .stands._base import Stand
+    from .targets import Target
+
+from .requests import RequestSpec
 
 
 def stats_dump(stats: dict, path: Path | None = None) -> None:
@@ -80,27 +82,34 @@ class RunStore:
         self.checkpoint()
         return attempt
 
-    def save_stand(self, stand: "Stand", metadata: dict) -> None:
-        """Record server configurations/output after shutdown, including setup failures."""
+    def save_target(self, target: "Target", metadata: dict, *, request: RequestSpec) -> None:
+        """Record owned process evidence, or explicit lack of ownership of an external URL."""
         relative = f"stand-{len(self.data["stands"]) + 1:04d}"
         directory = self.path / relative
         directory.mkdir(mode=0o700)
         evidence = []
-        current = stand
+        url = request.build_url(target.url)
 
-        while current is not None:
-            prefix = f"{current.alias}-"
+        for original in target.get_evidence():
+            entry = dict(original)
+            files = entry.pop("files")
+            prefix = f"{entry['alias']}-"
 
-            for filename, contents in current.configurations.items():
-                (directory / f"{prefix}{filename}").write_text(contents, encoding="utf-8")
+            for filename, contents in files.items():
 
-            (directory / f"{prefix}stdout.bin").write_bytes(current.output[0])
-            (directory / f"{prefix}stderr.bin").write_bytes(current.output[1])
-            evidence.append({
-                "alias": current.alias, "argv": current.argv, "cleanup_error": current.cleanup_error,
-                "output_truncated": current.output_truncated,
-            })
-            current = current.child
+                if Path(filename).name != filename:
+                    raise ValueError("Evidence filenames must not contain directories")
 
-        self.data["stands"].append({**metadata, "artifacts": relative, "processes": evidence})
+                redacted = request.redact(contents, url)
+                (directory / f"{prefix}{filename}").write_bytes(redacted)
+                entry["artifacts_redacted"] = entry.get("artifacts_redacted", False) or redacted != contents
+
+            entry["argv"] = [request.redact(value.encode(), url).decode() for value in entry["argv"]]
+
+            if entry["cleanup_error"] is not None:
+                entry["cleanup_error"] = request.redact(entry["cleanup_error"].encode(), url).decode()
+
+            evidence.append(entry)
+
+        self.data["stands"].append({**metadata, "ownership": target.ownership, "artifacts": relative, "processes": evidence})
         self.checkpoint()

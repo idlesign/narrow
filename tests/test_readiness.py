@@ -9,6 +9,22 @@ import pytest
 from narrow import NarrowException, readiness
 from narrow.configuration import get_ssl_ca_path, get_ssl_tuple
 
+@pytest.mark.parametrize("ca_file", [None, Path("explicit-ca.pem")])
+def test_custom_get_probe_does_not_read_unbounded_body(ca_file: Path | None, monkeypatch: pytest.MonkeyPatch) -> None:
+    connection = Mock()
+    connection.getresponse.return_value.status = 204
+    context = Mock(return_value="tls-context")
+    monkeypatch.setattr(readiness.ssl, "create_default_context", context)
+    monkeypatch.setattr(readiness.http.client, "HTTPSConnection", Mock(return_value=connection))
+
+    count = readiness.wait_http_ready("https://127.0.0.1:8080/health?check=yes", timeout=1, ca_file=ca_file, expected_status=204)
+
+    assert count == 1
+    context.assert_called_once_with(cafile=ca_file)
+    connection.request.assert_called_once_with("GET", "/health?check=yes", headers={"Connection": "close"})
+    connection.getresponse.return_value.read.assert_not_called()
+    connection.close.assert_called_once()
+
 
 @pytest.fixture(autouse=True)
 def readiness_clock(monkeypatch: pytest.MonkeyPatch) -> None:

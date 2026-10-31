@@ -5,7 +5,10 @@ from .configuration import LoadSpec, Settings, bootstrap
 from .exceptions import NarrowException
 from .plotting import plot
 from .results import SampleResult
+from .requests import RequestSpec
+from .targets import CommandTarget, UrlTarget
 from .runner import Runner, RunOptions
+from .run_config import read_run_config
 from .shortcuts import gather_stats, stand_run
 from .stands import STANDS
 
@@ -15,6 +18,9 @@ __all__ = [
     "STANDS",
     "VERSION",
     "LoadSpec",
+    "RequestSpec",
+    "UrlTarget",
+    "CommandTarget",
     "NarrowException",
     "Runner",
     "RunOptions",
@@ -23,6 +29,7 @@ __all__ = [
     "bootstrap",
     "gather_stats",
     "plot",
+    "read_run_config",
     "stand_run",
     "stats_dump",
     "stats_load",

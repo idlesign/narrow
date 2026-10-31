@@ -4,9 +4,10 @@ import json
 import math
 from urllib.parse import urlsplit
 
-from ..configuration import LoadSpec, get_ssl_ca_path
+from ..configuration import LoadSpec
 from ..exceptions import BencherException
 from ..results import SampleResult
+from ..requests import RequestSpec, validate_url
 from ._base import Bencher, register_bencher
 
 DEADLINE_ERROR = "aborted due to deadline"
@@ -57,7 +58,7 @@ def read_distribution(value: object, *, http_statuses: bool = False) -> dict[str
     return value
 
 
-def parse_oha_report(raw: bytes, load: LoadSpec) -> SampleResult:
+def parse_oha_report(raw: bytes, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> SampleResult:
     """Calculate whole-run 2xx throughput and preserve the latency population."""
 
     try:
@@ -70,6 +71,10 @@ def parse_oha_report(raw: bytes, load: LoadSpec) -> SampleResult:
         outcomes = responses + sum(errors.values())
         deadline_outcomes = errors.get(DEADLINE_ERROR, 0)
         window_seconds = read_number(summary["total"], "summary.total")
+        body_bytes = summary["totalData"]
+
+        if type(body_bytes) is not int or body_bytes < 0 or (not responses and body_bytes):
+            raise ValueError("Invalid response body byte accounting")
 
         if window_seconds <= 0:
             raise ValueError("Whole-run window must be positive")
@@ -104,7 +109,7 @@ def parse_oha_report(raw: bytes, load: LoadSpec) -> SampleResult:
             value = percentiles[percentile]
 
             if responses:
-                latency_ms[percentile] = read_number(value, percentile) * 1000
+                latency_ms[percentile] = read_number(read_number(value, percentile) * 1000, f"latency_ms.{percentile}")
 
             elif value is not None:
                 raise ValueError("Latency without HTTP responses must be null")
@@ -115,13 +120,28 @@ def parse_oha_report(raw: bytes, load: LoadSpec) -> SampleResult:
         if responses and not latency_ms["p50"] <= latency_ms["p95"] <= latency_ms["p99"]:
             raise ValueError("Unordered latency percentiles")
 
-    except (ValueError, TypeError, KeyError, UnicodeError) as error:
+    except (ValueError, TypeError, KeyError, UnicodeError, OverflowError) as error:
         raise BencherException(f"Invalid oha JSON: {error}") from error
+
+    status = "ok" if responses and successful_responses == responses and not errors else "http_error"
+    reason = None
+
+    if request.expected_status is not None:
+        status = (
+            "ok" if responses and statuses == {f"{request.expected_status}": responses} and not errors else "http_error"
+        )
+
+        if responses and statuses != {f"{request.expected_status}": responses}:
+            status, reason = "response_error", "Unexpected HTTP status"
+
+    if request.expected_response_bytes is not None and body_bytes != responses * request.expected_response_bytes:
+        status, reason = "response_error", "Unexpected total response body size"
 
     return SampleResult(
         clients=load.clients,
-        status="ok" if successful_responses == responses and not errors else "http_error",
+        status=status, reason=reason,
         rps=successful_responses / window_seconds,
+        completed_rps=responses / window_seconds, response_body_bytes=body_bytes,
         window_seconds=window_seconds,
         responses=responses,
         successful_responses=successful_responses,
@@ -142,13 +162,13 @@ class OhaBencher(Bencher):
     expected_version = "oha 1.16.0"
     description = "oha 1.16.0 (HTTP/1.1, JSON)"
 
-    def build_argv(self, url: str, load: LoadSpec) -> list[str]:
+    def build_argv(self, url: str, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> list[str]:
         """Specify policies explicitly instead of relying on generator defaults."""
         argv = [
             self.binary, "--no-tui", "--output-format", "json", "--http-version", "1.1",
             "--worker-threads", f"{load.worker_threads}", "-c", f"{load.clients}",
             "-t", f"{load.timeout}s", "--connect-timeout", f"{load.connect_timeout}s",
-            "--redirect", "0", "--disable-compression",
+            "--redirect", "0", "--disable-compression", "-m", request.method,
         ]
         argv.extend(["-n", f"{load.requests}"] if load.requests is not None else ["-z", f"{load.duration}s"])
 
@@ -161,18 +181,26 @@ class OhaBencher(Bencher):
         if not load.keepalive:
             argv.append("--disable-keepalive")
 
-        if urlsplit(url).scheme == "https":
-            argv.extend(["--cacert", get_ssl_ca_path()])
+        if urlsplit(url).scheme == "https" and request.ca_file is not None:
+            argv.extend(["--cacert", f"{request.ca_file}"])
 
-        argv.append(url)
+        for name, value in request.headers:
+            argv.extend(["-H", f"{name}: {value}"])
+
+        if request.body is not None:
+            argv.extend(["-D", f"{request.body}"])
+
+        argv.append(request.build_url(url))
         return argv
 
-    def validate_load(self, url: str, load: LoadSpec) -> None:
+    def validate_load(self, url: str, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> None:
         """Accept HTTP/HTTPS; numeric combinations are validated by LoadSpec."""
 
-        if urlsplit(url).scheme not in ("http", "https"):
-            raise BencherException("oha requires HTTP or HTTPS")
+        validate_url(url)
 
-    def parse_report(self, raw: bytes, load: LoadSpec) -> SampleResult:
+        if request.ca_file is not None and urlsplit(url).scheme != "https":
+            raise BencherException("A custom CA requires HTTPS")
+
+    def parse_report(self, raw: bytes, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> SampleResult:
         """Normalize the checked report while raw bytes stay in the attempt artifacts."""
-        return parse_oha_report(raw, load)
+        return parse_oha_report(raw, load, request=request)

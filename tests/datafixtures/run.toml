@@ -1,0 +1,36 @@
+[run]
+clients = [1, 4]
+requests = 10
+repeats = 2
+warmup_requests = 3
+attempt_timeout = 12
+ready_timeout = 2
+budget = 90
+worker_threads = 2
+request_timeout = 1
+connect_timeout = 0.5
+keepalive = false
+drain = false
+
+[request]
+method = "POST"
+path = "/upload?key=PATH_SECRET"
+headers = [["Authorization", "Bearer HEADER_SECRET"], ["Content-Type", "application/octet-stream"]]
+body = "inputs/body.bin"
+ca_file = "inputs/ca.pem"
+expected_status = 201
+expected_response_bytes = 12
+max_body_bytes = 32
+
+[[targets]]
+name = "external"
+url = "https://example.test/api?token=URL_SECRET"
+
+[[targets]]
+name = "owned"
+url = "https://127.0.0.1:8800/"
+argv = ["./venv/bin/python", "server.py", "ENV_SECRET"]
+cwd = "server"
+ready_path = "/health"
+ready_status = 204
+env = { TOKEN = "ENV_SECRET" }

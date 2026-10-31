@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>narrow measurement report</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f1f5f9; color: #1e293b; font: 15px/1.5 system-ui, sans-serif; }
+    main { max-width: 1500px; margin: auto; padding: 28px; }
+    h1, h2, h3, p { margin: 0 0 12px; }
+    h1 { font-size: 28px; letter-spacing: -.5px; }
+    h2 { font-size: 20px; }
+    h3 { margin-top: 24px; font-size: 17px; }
+    section, details { margin: 20px 0; padding: 22px; border: 1px solid #e2e8f0; border-radius: 12px; background: white; }
+    .muted, .help { color: #475569; }
+    .status { display: inline-block; padding: 2px 10px; border: 1px solid #94a3b8; border-radius: 20px; font-size: 14px; }
+    .summary { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 18px; }
+    .summary strong { font-size: 22px; }
+    .chart { padding: 0; overflow-x: auto; }
+    .chart > div { min-width: 850px; }
+    .help { padding: 0 22px 16px; font-size: 13px; }
+    .table-scroll { max-height: 520px; overflow: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    th, td { padding: 9px 12px; border-bottom: 1px solid #e2e8f0; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; }
+    th { position: sticky; top: 0; background: #f8fafc; }
+    td:first-child { font-weight: 500; }
+    summary { cursor: pointer; font-weight: 600; }
+    pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+    li + li { margin-top: 8px; }
+    @media (max-width: 700px) { main { padding: 12px; } section, details { padding: 16px; } .chart { padding: 0; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>narrow <span class="status">$status</span></h1>
+    <p class="muted">$date</p>
+    <p>$reason</p>
+    <div class="summary">
+      <span><strong>$measured</strong> measured attempts</span>
+      <span><strong>$warmups</strong> warmups, not plotted</span>
+      <span><strong>$series</strong> request / load series</span>
+      <span><strong>$issues</strong> attempts with issues</span>
+    </div>
+  </header>
+  <section class="chart" aria-label="Throughput and latency charts">
+    $chart
+    <p class="help">Hover for repeat counts and outcomes. Click a legend item to toggle a server series
+      (or a metric in a single-series report).
+      Use the camera button to export both panels as PNG, without a separate plotting backend.</p>
+  </section>
+  <section>
+    <h2>Interpretation</h2>
+    <ul>$notes</ul>
+  </section>
+  <section>
+    <h2>Recorded conditions</h2>
+    $conditions
+  </section>
+  <section>
+    <h2>Target lifecycle evidence</h2>
+    $targets
+  </section>
+  <section>
+    <h2>Attempts and outcomes</h2>
+    <p class="muted">Includes warmups and excluded attempts. Raw values are evidence, not necessarily usable measurements.
+      Artifact paths refer to the original run directory.</p>
+    $attempts
+  </section>
+  <details>
+    <summary>Full recorded metadata</summary>
+    <pre>$metadata</pre>
+  </details>
+</main>
+</body>
+</html>

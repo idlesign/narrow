@@ -1,6 +1,7 @@
 import io
 import os
 import signal
+from pathlib import Path
 from collections.abc import Callable
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -70,6 +71,18 @@ def test_capture_channels_without_shell(process_factory: ProcessFactory) -> None
     assert signals.call_args_list[0].args == (12345, signal.SIGTERM)
     child.poll.assert_not_called()
     child.wait.assert_called_once()
+
+def test_process_receives_explicit_cwd_and_environment(process_factory: ProcessFactory, tmp_path: Path) -> None:
+    spawn, _signals, _child = process_factory()
+    environment = {"ONLY_THIS": "value"}
+    process = ProcessHandle(["tool"], cwd=tmp_path, env=environment)
+    environment["ONLY_THIS"] = "changed"
+
+    process.start()
+    process.wait(timeout=1)
+
+    assert spawn.call_args.kwargs["cwd"] == tmp_path
+    assert spawn.call_args.kwargs["env"] == {"ONLY_THIS": "value"}
 
 
 @pytest.mark.parametrize("exit_code", [0, 2])

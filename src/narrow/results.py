@@ -11,6 +11,10 @@ class SampleResult:
     status: str = "error"
     reason: str | None = None
     rps: float | None = None
+    completed_rps: float | None = None
+    response_body_bytes: int | None = None
+    request: dict = field(default_factory=dict)
+    artifacts_redacted: bool = False
     window_seconds: float | None = None
     responses: int | None = None
     successful_responses: int | None = None

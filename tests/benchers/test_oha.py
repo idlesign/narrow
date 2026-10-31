@@ -1,6 +1,7 @@
 import json
 from collections.abc import Callable
 from unittest.mock import Mock
+from pathlib import Path
 
 import pytest
 
@@ -10,6 +11,7 @@ from narrow.benchers.oha import OhaBencher, parse_oha_report
 from narrow.configuration import LoadSpec, get_ssl_ca_path
 from narrow.exceptions import BencherException
 from narrow.processes import CommandResult
+from narrow.requests import RequestSpec
 
 
 @pytest.mark.parametrize(("filename", "requests", "expected", "status"), [
@@ -40,7 +42,7 @@ def test_reject_invalid_report(raw: bytes) -> None:
 
 def test_deadline_is_not_a_response() -> None:
     raw = json.dumps({
-        "summary": {"successRate": None, "total": 1, "requestsPerSec": 2},
+        "summary": {"successRate": None, "total": 1, "requestsPerSec": 2, "totalData": 0},
         "statusCodeDistribution": {}, "errorDistribution": {oha.DEADLINE_ERROR: 2},
         "latencyPercentiles": {"p50": None, "p95": None, "p99": None},
     }).encode()
@@ -61,7 +63,7 @@ def test_build_explicit_http_policy_without_io(monkeypatch: pytest.MonkeyPatch) 
     bencher = OhaBencher()
     load = LoadSpec(duration=1.5, clients=2, qps=20, keepalive=False)
 
-    argv = bencher.build_argv("https://127.0.0.1:4443/", load)
+    argv = bencher.build_argv("https://127.0.0.1:4443/", load, request=RequestSpec(ca_file=Path(get_ssl_ca_path())))
 
     assert argv[argv.index("--http-version") + 1] == "1.1"
     assert argv[argv.index("-z") + 1] == "1.5s"
@@ -100,3 +102,61 @@ def test_version_mismatch_is_rejected_before_workload(monkeypatch: pytest.Monkey
 
     with pytest.raises(BencherException, match="Expected oha 1.16.0"):
         OhaBencher().prepare()
+
+def test_custom_request_argv_and_system_tls() -> None:
+    request = RequestSpec(
+        method="POST", path="/upload?mode=test", headers=(("Content-Type", "application/json"),), body=Path("body.bin"),
+    )
+
+    argv = OhaBencher().build_argv("https://example.test/", LoadSpec(requests=1), request=request)
+
+    assert argv[argv.index("-m") + 1] == "POST"
+    assert argv[argv.index("-H") + 1] == "Content-Type: application/json"
+    assert argv[argv.index("-D") + 1] == "body.bin"
+    assert argv[-1] == "https://example.test/upload?mode=test"
+    assert "--cacert" not in argv and "--insecure" not in argv
+
+@pytest.mark.parametrize(("request_spec", "reason"), [
+    (RequestSpec(expected_status=201), "status"), (RequestSpec(expected_response_bytes=13), "body size"),
+])
+def test_wrong_response_is_not_a_success(
+    request_spec: RequestSpec, reason: str, datafix_readbin: Callable[[str], bytes],
+) -> None:
+    sample = parse_oha_report(datafix_readbin("oha/success.json"), LoadSpec(requests=10), request=request_spec)
+
+    assert sample.status == "response_error"
+    assert reason in sample.reason
+    assert sample.rps == sample.completed_rps == 5
+    assert sample.response_body_bytes == 120
+
+def test_run_snapshots_body_and_redacts_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, datafix_readbin: Callable[[str], bytes],
+) -> None:
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"payload")
+    seen = []
+    stdout = datafix_readbin("oha/success.json")
+
+    def create(argv: list[str]) -> Mock:
+        snapshot = Path(argv[argv.index("-D") + 1])
+        seen.append(snapshot)
+        assert snapshot.read_bytes() == b"payload"
+        source.write_bytes(b"changed")
+        return Mock(
+            argv=tuple(argv), collect_output=Mock(return_value=(stdout, b"Bearer PRIVATE")),
+            wait=Mock(return_value=CommandResult(tuple(argv), 0, stdout, b"Bearer PRIVATE", 1)),
+        )
+
+    monkeypatch.setattr(base, "ProcessHandle", create)
+    bencher = OhaBencher()
+    bencher.provenance = {"version": "oha 1.16.0"}
+    request = RequestSpec(method="POST", body=source, headers=(("Authorization", "Bearer PRIVATE"),))
+
+    result = bencher.run_once("https://example.test/", LoadSpec(requests=10), timeout=1, request=request)
+
+    assert result.status == "ok"
+    assert result.request["body"]["bytes"] == 7
+    assert not seen[0].exists()
+    assert result.artifacts_redacted
+    assert result.raw_stderr == b"[redacted]"
+    assert "PRIVATE" not in repr(result.serialize())

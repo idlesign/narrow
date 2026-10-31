@@ -1,4 +1,5 @@
 from ..configuration import LoadSpec
+from ..requests import RequestSpec
 from ._base import Bencher, register_bencher
 
 
@@ -9,7 +10,7 @@ class WeighttpBencher(Bencher):
     version_flag = "-v"
     description = "weighttp (count, plain HTTP/1.1)"
 
-    def build_argv(self, url: str, load: LoadSpec) -> list[str]:
+    def build_argv(self, url: str, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> list[str]:
         """Request persistent connections only when selected by the workload."""
         argv = [
             self.binary, "-c", f"{load.clients}", "-n", f"{load.requests}",
@@ -19,4 +20,4 @@ class WeighttpBencher(Bencher):
         if load.keepalive:
             argv.append("-k")
 
-        return [*argv, url]
+        return [*argv, request.build_url(url)]

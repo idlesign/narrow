@@ -6,12 +6,14 @@ import re
 import shutil
 from pathlib import Path
 from time import monotonic
+from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
 
 from .._base import Component
 from ..configuration import LoadSpec
 from ..exceptions import BencherException, NarrowException
 from ..processes import ProcessHandle, run_command
+from ..requests import RequestSpec, snapshot_request, redact_url
 from ..results import SampleResult
 
 BENCHERS = {}
@@ -56,7 +58,7 @@ class Bencher(Component):
         """Read the prepared executable's version."""
         return self.prepare()["version"]
 
-    def validate_load(self, url: str, load: LoadSpec) -> None:
+    def validate_load(self, url: str, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> None:
         """Legacy generators support count/plain HTTP only, with a process watchdog."""
 
         if urlsplit(url).scheme != "http" or load.duration is not None or load.qps is not None:
@@ -65,11 +67,17 @@ class Bencher(Component):
         if load.timeout != 5.0 or load.connect_timeout != 2.0:
             raise BencherException(f"{self.alias}: custom request/connect timeouts are unsupported; use the watchdog")
 
-    def build_argv(self, url: str, load: LoadSpec) -> list[str]:
+        if (
+            request.method != "GET" or request.headers or request.body is not None or request.ca_file is not None
+            or request.expected_status is not None or request.expected_response_bytes is not None
+        ):
+            raise BencherException(f"{self.alias}: custom HTTP requests require oha")
+
+    def build_argv(self, url: str, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> list[str]:
         """Build arguments for one attempt without starting a process."""
         raise NotImplementedError
 
-    def parse_report(self, raw: bytes, load: LoadSpec) -> SampleResult:
+    def parse_report(self, raw: bytes, load: LoadSpec, *, request: RequestSpec = RequestSpec()) -> SampleResult:
         """Parse legacy text, retaining partial HTTP counts and a numeric 2xx rate."""
         text = raw.decode("utf-8", errors="replace")
         rates = re.search(r"finished in (\d+(?:\.\d+)?)(us|ms|s),[^\n]*? (\d+(?:\.\d+)?) req/s,", text)
@@ -93,17 +101,50 @@ class Bencher(Component):
             reason=None if complete else f"{counts["2xx"]}/{load.requests} requests returned 2xx",
             rps=reported_rps if complete else counts["2xx"] / window,
             window_seconds=window, responses=responses, successful_responses=counts["2xx"], statuses=counts,
+            completed_rps=responses / window,
             errors={"unreported outcomes": load.requests - responses} if responses < load.requests else {},
         )
 
-    def run_once(self, url: str, load: LoadSpec, *, timeout: float) -> SampleResult:
+    def run_once(
+        self, url: str, load: LoadSpec, *, timeout: float, request: RequestSpec = RequestSpec(),
+    ) -> SampleResult:
+        """Snapshot inputs outside the measured interval and redact known request secrets."""
+        url = request.build_url(url)
+        self.validate_load(url, load, request=request)
+
+        with TemporaryDirectory(prefix="narrow-request-") as directory:
+            prepared, metadata = snapshot_request(request, Path(directory))
+            sample = self._run_once(url, load, timeout=timeout, request=prepared)
+
+        metadata.update(url=redact_url(url), url_sha256=hashlib.sha256(url.encode()).hexdigest())
+        sample.request = metadata
+        stdout, stderr = sample.raw_stdout, sample.raw_stderr
+        sample.raw_stdout = request.redact(stdout, url)
+        sample.raw_stderr = request.redact(stderr, url)
+        sample.artifacts_redacted = (stdout, stderr) != (sample.raw_stdout, sample.raw_stderr)
+        sample.argv = tuple(request.redact(value.encode(), url).decode() for value in sample.argv)
+        errors = {}
+
+        for name, count in sample.errors.items():
+            redacted = request.redact(name.encode(), url).decode()
+            errors[redacted] = errors.get(redacted, 0) + count
+
+        sample.errors = errors
+
+        for name in ("reason", "cleanup_error"):
+
+            if (value := getattr(sample, name)) is not None:
+                setattr(sample, name, request.redact(value.encode(), url).decode())
+
+        return sample
+
+    def _run_once(self, url: str, load: LoadSpec, *, timeout: float, request: RequestSpec) -> SampleResult:
         """Keep raw evidence on cancellation, timeout, parse and generator failure."""
-        self.validate_load(url, load)
 
         if self.provenance is None:
             self.prepare()
 
-        process = ProcessHandle(self.build_argv(url, load))
+        process = ProcessHandle(self.build_argv(url, load, request=request))
         began = monotonic()
         result = None
         failure = None
@@ -129,7 +170,7 @@ class Bencher(Component):
         stdout, stderr = process.collect_output()
 
         try:
-            sample = self.parse_report(stdout, load)
+            sample = self.parse_report(stdout, load, request=request)
 
         except BencherException as error:
             sample = SampleResult(load.clients, status="invalid", reason=f"{error}")
