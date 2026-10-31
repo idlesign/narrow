@@ -1,18 +1,7 @@
-narrow authors
-==============
+# narrow authors
 
 Created by Igor Starikov.
 
-
-Contributors
-------------
+## Contributors
 
 Here could be your name.
-
-
-
-Translators
------------
-
-Here could be your name.
-

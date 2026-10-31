@@ -1,25 +1,22 @@
-narrow contributing
-===================
+# Contributing to narrow
 
+Read and follow [IDLE.md](IDLE.md) before working on this project.
+See [Development](README.md#development) for setup and verification commands.
+Use ordinary CPython 3.12 with the GIL locally and in CI.
+Framework test dependencies live in the `frameworks` group, explicitly included by `tests`.
+The uWSGI server and its configuration builder belong to the optional `uwsgi` extra.
 
-Submit issues
--------------
+## Submit issues
 
-If you spotted something weird in application behavior or want to propose a feature you are welcome.
+Report unexpected behavior and propose features in the
+[issue tracker](https://github.com/idlesign/narrow/issues).
 
+## Write code
 
-Write code
-----------
-If you are eager to participate in application development and to work on an existing issue (whether it should
-be a bugfix or a feature implementation), fork, write code, and make a pull request right from the forked project page.
+Fork the repository, make a focused change, and open a pull request.
+Keep public behavior intact during tooling migrations. Tests must not start
+benchmark stands, load generators, or cleanup commands against the host system.
 
+## Spread the word
 
-Spread the word
----------------
-
-If you have some tips and tricks or any other words that you think might be of interest for the others — publish it
-wherever you find convenient.
-
-
-See also: https://github.com/idlesign/narrow
-
+Share useful tips and experience wherever you find convenient.
