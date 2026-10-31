@@ -1,5 +1,6 @@
 import json
-from collections import namedtuple, OrderedDict
+from collections import OrderedDict, namedtuple
+from pathlib import Path
 from time import sleep
 
 from .._base import Component
@@ -20,10 +21,12 @@ def register_bencher(cls):
     return cls
 
 
-StatsItem = namedtuple('ResultItem', ['clients', 'requests', 'rps'])
+# Keep the existing public tuple type and its ResultItem name.
+StatsItem = namedtuple("ResultItem", ["clients", "requests", "rps"])  # noqa: PYI024
 
 
-def stats_dump(stats, update=True):
+def stats_dump(stats: dict, update: bool = True) -> None:  # noqa: FBT001, FBT002 - Public positional argument.
+    """Save statistics to the configured JSON file, deduplicating versions."""
     versions = []
 
     for version in stats['meta']['versions']:
@@ -35,20 +38,24 @@ def stats_dump(stats, update=True):
     base_stats = {}
 
     if update:
+        # Preserve legacy update behavior during the tooling migration.
         try:
             base_stats = stats_load()
-        except:
+
+        except:  # noqa: E722
             pass
 
     base_stats.update(stats)
 
-    with open(Settings.FILENAME_STATS_DUMP, 'w') as f:
-        f.write(json.dumps(base_stats))
+    with Path(Settings.FILENAME_STATS_DUMP).open("w") as target_file:
+        target_file.write(json.dumps(base_stats))
 
 
-def stats_load():
-    with open(Settings.FILENAME_STATS_DUMP) as f:
-        stats = f.read()
+def stats_load() -> dict:
+    """Load saved JSON statistics and restore ResultItem samples."""
+
+    with Path(Settings.FILENAME_STATS_DUMP).open() as source_file:
+        stats = source_file.read()
 
     loaded = json.loads(stats)
 
@@ -61,6 +68,7 @@ def stats_load():
 
 
 class Bencher(Component):
+    """Run an external generator across the existing concurrency grid."""
 
     max_clients = 64
 
@@ -68,7 +76,7 @@ class Bencher(Component):
         url = stand.protocol + '://' + stand.address + '/'
         return self.benchmark(url)
 
-    def benchmark(self, url):
+    def benchmark(self, url: str) -> list[StatsItem]:
         LOG.info('Running `%s` against %s ...', self.alias, url)
 
         fire = self.fire
@@ -90,14 +98,14 @@ class Bencher(Component):
 
                 rps = fire(url, num_clients=num_clients, num_requests=num_requests)
 
-            except NarrowException as e:
+            except NarrowException as error:
 
                 if Settings.STOP_ON_BENCHER_ERROR:
                     raise
 
                 else:
                     rps = None
-                    LOG.error('Firing failed for r%s c%s: %s', num_requests, num_clients, e)
+                    LOG.error('Firing failed for r%s c%s: %s', num_requests, num_clients, error)
 
             results.append(StatsItem(num_clients, num_requests, rps))
 

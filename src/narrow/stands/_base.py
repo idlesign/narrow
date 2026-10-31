@@ -23,6 +23,7 @@ def nullcontext(*args, **kwargs):
 
 
 class Stand(Component):
+    """A server topology with the legacy process lifecycle and cleanup."""
 
     address = '0.0.0.0:8000'
     protocol = 'http'
@@ -33,14 +34,14 @@ class Stand(Component):
         self.child = None
         self.app = None
 
-    def get_version(self):
-        return '%s x.x' % self.alias
+    def get_version(self) -> str:
+        return f"{self.alias} x.x"
 
     def get_alias_full(self):
         app_alias = ''
 
         if self.uses_app and self.app:
-            app_alias = '_%s' % self.app.get_alias_full()
+            app_alias = f"_{self.app.get_alias_full()}"
 
         return super().get_alias_full() + app_alias
 
@@ -62,7 +63,7 @@ class Stand(Component):
             prc = self.bootstrap()
 
             if prc:
-                LOG.debug('Stand `%s` spawned process %s' % (self.alias, prc.pid))
+                LOG.debug("Stand `%s` spawned process %s", self.alias, prc.pid)
                 self.prc = prc
 
             try:
@@ -83,9 +84,9 @@ class Stand(Component):
 
         # need to wipe all processes.
         try:
-            run_command('killall %s' % self.prc_name)
+            run_command(f"killall {self.prc_name}")
 
-        except Exception as e:
-            LOG.warning('%s' % e)
+        except Exception as error:  # noqa: BLE001 - Preserve legacy best-effort cleanup.
+            LOG.warning("%s", error)
 
-        LOG.debug('Stand `%s` finalized process %s' % (self.alias, prc.pid))
+        LOG.debug("Stand `%s` finalized process %s", self.alias, prc.pid)

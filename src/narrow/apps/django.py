@@ -1,4 +1,6 @@
-from ._base import register_app, App
+from importlib.metadata import version
+
+from ._base import App, register_app
 
 
 @register_app
@@ -10,6 +12,5 @@ class Django(App):
     alias = 'django'
     description = 'Django framework application'
 
-    def get_version(self):
-        from django import __version__
-        return 'Django %s' % __version__
+    def get_version(self) -> str:
+        return f"Django {version('django')}"

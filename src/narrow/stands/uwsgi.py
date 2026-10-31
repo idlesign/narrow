@@ -1,8 +1,8 @@
 from uwsgiconf.presets.nice import PythonSection
 
-from ._base import register_stand, Stand
-from ..configuration import get_path_in_current, get_path_in_package, Settings, get_ssl_tuple
-from ..utils import create_socket_file, get_logger, run_command_detached, run_command, check_process
+from ..configuration import Settings, get_path_in_current, get_ssl_tuple
+from ..utils import create_socket_file, get_logger, run_command, run_command_detached
+from ._base import Stand, register_stand
 
 sockets = PythonSection.networking.sockets
 
@@ -38,15 +38,15 @@ class Uwsgi(Stand):
         )
         return params
 
-    def get_version(self):
-        return 'uwsgi %s' % run_command('%s --version' % self.prc_name)
+    def get_version(self) -> str:
+        return f"uwsgi {run_command(f'{self.prc_name} --version')}"
 
     def generate_section(self, socket):
 
         alias = self.alias
 
         if Settings.LOG_WRITE:
-            log_path = get_path_in_current('log_%s.log' % alias)
+            log_path = get_path_in_current(f"log_{alias}.log")
 
         else:
             log_path = '/dev/null'
@@ -80,7 +80,7 @@ class Uwsgi(Stand):
 
         LOG.debug('Uwsgi config: %s', filepath)
 
-        return run_command_detached('%s --ini %s' % (self.prc_name, filepath))
+        return run_command_detached(f"{self.prc_name} --ini {filepath}")
 
 
 @register_stand
@@ -113,7 +113,7 @@ class UwsgiUwsgiSocket(Uwsgi):
 
     address = '127.0.0.1:8003'
 
-    def __init__(self, unix=False):
+    def __init__(self, unix: bool = False) -> None:  # noqa: FBT001, FBT002 - Public positional argument.
         super().__init__()
 
         self.unix = unix
@@ -122,7 +122,7 @@ class UwsgiUwsgiSocket(Uwsgi):
             alias = 'uwsgi_uwsgi_unix'
             address = create_socket_file(prefix=alias)
 
-            LOG.debug('Uwsgi socket file: %s' % address)
+            LOG.debug("Uwsgi socket file: %s", address)
 
         else:
             alias = 'uwsgi_uwsgi_tcp'

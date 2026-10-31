@@ -1,0 +1,72 @@
+[project]
+name = "narrow"
+dynamic = ["version"]
+description = "Naive throughput measurements for Python web apps and servers"
+authors = [
+    { name = "Igor Starikov", email = "idlesign@yandex.ru" },
+]
+readme = "README.md"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "uwsgi",
+    "uwsgiconf>=0.14.2",
+    "click",
+    "plotly",
+    "envbox",
+    "colorhash",
+]
+
+[project.urls]
+Homepage = "https://github.com/idlesign/narrow"
+Issues = "https://github.com/idlesign/narrow/issues"
+
+[project.scripts]
+narrow = "narrow.cli:main"
+
+[dependency-groups]
+dev = [
+    { include-group = "docs" },
+    { include-group = "linters" },
+    { include-group = "tests" },
+]
+docs = [
+    "mkdocs-material",
+    "mkdocs-navsorted-plugin",
+    "mkdocs-apidescribed-plugin",
+]
+linters = [
+    "ruff==0.13.1",
+]
+tests = [
+    "pytest>=8,<10",
+    "bottle",
+    "cherrypy",
+    "django",
+    "flask",
+]
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/narrow/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/narrow"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "pyproject.toml", "README.md", "LICENSE", "AUTHORS.md", "CHANGELOG.md", "INSTALL.md"]
+exclude = ["**/__pycache__", "**/*.pyc"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

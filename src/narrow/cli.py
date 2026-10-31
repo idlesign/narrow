@@ -1,11 +1,22 @@
-#!/usr/bin/env python
 import logging
 import sys
 
 import click
 
-from narrow import *
-from narrow.utils import get_logger, configure_logging
+from . import (
+    APPS,
+    BENCHERS,
+    STANDS,
+    VERSION,
+    NarrowException,
+    Settings,
+    gather_stats,
+    plot,
+    stand_run,
+    stats_dump,
+    stats_load,
+)
+from .utils import configure_logging, get_logger
 
 LOG = get_logger(__name__)
 
@@ -14,13 +25,13 @@ option_log = click.option('--log', help='Dump logs', is_flag=True)
 option_app = click.option('--app', help='Application (framework) to use', multiple=True)
 
 
-def plot_stats():
+def plot_stats() -> str:
     stats = stats_load()
     return plot(stats)
 
 
 @click.group()
-@click.version_option(version=VERSION_STR)
+@click.version_option(version=VERSION)
 @click.option('--verbose', help='Output additional information', is_flag=True)
 def entry_point(verbose):
     """narrow command line utilities."""
@@ -69,9 +80,10 @@ def stand_up(stand, log, app):
     stand_run(stand_alias=stand, app_alias=app)
 
 
-def print_registry_items(registry):
+def print_registry_items(registry: dict) -> None:
+
     for alias, item in sorted(registry.items(), key=lambda item: item[0]):
-        click.secho('%s: %s' % (alias, item.description))
+        click.secho(f"{alias}: {item.description}")
 
 
 @entry_point.command()
@@ -92,13 +104,13 @@ def list_apps():
     print_registry_items(APPS)
 
 
-def main():
+def main() -> None:
 
     try:
         entry_point(obj={})
 
-    except NarrowException as e:
-        click.secho(u'%s' % e, err=True, fg='red')
+    except NarrowException as error:
+        click.secho(f"{error}", err=True, fg="red")
         sys.exit(1)
 
 

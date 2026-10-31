@@ -1,8 +1,8 @@
-import os
+from pathlib import Path
 
 from envbox import SettingsBase
 
-from .utils import run_command, get_logger
+from .utils import get_logger, run_command
 
 
 class _S(SettingsBase):
@@ -21,22 +21,25 @@ Settings = _S()
 
 
 LOG = get_logger(__name__)
-DIR_PACKAGE = os.path.dirname(os.path.abspath(__file__))
-DIR_CURRENT = os.getcwd()
+DIR_PACKAGE = f"{Path(__file__).resolve().parent}"
+DIR_CURRENT = f"{Path.cwd()}"
 
 
-def get_ssl_tuple():
+def get_ssl_tuple() -> tuple[str, str]:
+    """Return paths to the bundled public test certificate and private key."""
     cert = get_path_in_package('files/test.cer')
     key = get_path_in_package('files/testnopass.pem')
     return cert, key
 
 
-def get_path_in_package(filename):
-    return os.path.join(DIR_PACKAGE, filename)
+def get_path_in_package(filename: str) -> str:
+    """Return a resource path inside the installed package."""
+    return f"{Path(DIR_PACKAGE) / filename}"
 
 
-def get_path_in_current(filename):
-    return os.path.join(DIR_CURRENT, filename)
+def get_path_in_current(filename: str) -> str:
+    """Return a path relative to the directory captured when importing narrow."""
+    return f"{Path(DIR_CURRENT) / filename}"
 
 
 def bootstrap():
@@ -62,7 +65,7 @@ def bootstrap():
     return env_info
 
 
-def get_environment_info():
+def get_environment_info() -> dict[str, int | str]:
     """
 
     From http://brianmcdonnell.github.io/pycon_ie_2013
@@ -75,21 +78,18 @@ def get_environment_info():
 
     :rtype: dict
     """
-    env_info = dict(
-
-        max_conn = int(run_command('cat /proc/sys/net/core/somaxconn')),
-        tcp_backlog = int(run_command('cat /proc/sys/net/ipv4/tcp_max_syn_backlog')),
-
-        ulimit_soft = run_command('ulimit -S'),
-        ulimit_hard = run_command('ulimit -H'),
-
-    )
+    env_info = {
+        "max_conn": int(run_command("cat /proc/sys/net/core/somaxconn")),
+        "tcp_backlog": int(run_command("cat /proc/sys/net/ipv4/tcp_max_syn_backlog")),
+        "ulimit_soft": run_command("ulimit -S"),
+        "ulimit_hard": run_command("ulimit -H"),
+    }
 
     LOG.info(
         'Current net.ipv4.tcp_max_syn_backlog = %(tcp_backlog)s\n'
         'Current net.core.somaxconn = %(max_conn)s\n'
         'Current ulimit soft = %(ulimit_soft)s\n'
-        'Current ulimit hard = %(ulimit_hard)s' % env_info
+        'Current ulimit hard = %(ulimit_hard)s', env_info,
     )
 
     return env_info

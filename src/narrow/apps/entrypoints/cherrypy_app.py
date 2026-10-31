@@ -1,7 +1,7 @@
 import cherrypy
 
 
-class MyApp(object):
+class MyApp:
 
     @cherrypy.expose
     def index(self):

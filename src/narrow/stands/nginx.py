@@ -1,18 +1,19 @@
-from ._base import register_stand, Stand
+from ..configuration import Settings, get_path_in_current, get_ssl_tuple
+from ..utils import get_logger, run_command, run_command_detached, save_to_tmp
+from ._base import Stand, register_stand
 from .uwsgi import UwsgiUwsgiSocket
-from ..configuration import get_path_in_current, get_ssl_tuple, Settings
-from ..utils import run_command_detached, save_to_tmp, get_logger, run_command, check_process
 
 LOG = get_logger(__name__)
 
 
 class NginxBase(Stand):
+    """Build and launch the legacy nginx configuration."""
 
     address = '127.0.0.1:8001'
     prc_name = 'nginx'
 
-    def get_version(self):
-        return run_command('%s -v' % self.prc_name).replace('nginx version: ', '')
+    def get_version(self) -> str:
+        return run_command(f"{self.prc_name} -v").replace("nginx version: ", "")
 
     @property
     def location(self):
@@ -27,48 +28,40 @@ class NginxBase(Stand):
         _, _, port_ = self.address.partition(':')
         return port_
 
-    def get_config(self):
+    def get_config(self) -> str:
 
         if Settings.LOG_WRITE:
-            log_path_access = get_path_in_current('log_%s_access.log' % self.alias)
-            log_path_error = get_path_in_current('log_%s_error.log' % self.alias)
+            log_path_access = get_path_in_current(f"log_{self.alias}_access.log")
+            log_path_error = get_path_in_current(f"log_{self.alias}_error.log")
 
         else:
             log_path_access = log_path_error = '/dev/null'
 
-        config = '''
+        config = f"""
         pid /tmp/narrow_nginx.pid;
         daemon off;
-        worker_processes %(workers)s;
-        
-        events {
-            worker_connections %(max_connections)s;
-        }
-        
-        error_log %(log_error)s;
-        
-        http {
-            server {
-            
-                access_log %(log_access)s;
-                
-                listen %(port)s backlog=%(max_connections)s;
+        worker_processes {Settings.WORKERS};
+
+        events {{
+            worker_connections {Settings.MAX_CONNECTIONS};
+        }}
+
+        error_log {log_path_error};
+
+        http {{
+            server {{
+
+                access_log {log_path_access};
+
+                listen {self.port} backlog={Settings.MAX_CONNECTIONS};
                 server_name _;
-                
-                location %(location_path)s {
-                     %(location_commands)s
-                }
-            }
-        }
-        ''' % dict(
-            port=self.port,
-            max_connections=Settings.MAX_CONNECTIONS,
-            location_path=self.location,
-            location_commands=self.location_commands,
-            log_access=log_path_access,
-            log_error=log_path_error,
-            workers=Settings.WORKERS,
-        )
+
+                location {self.location} {{
+                     {self.location_commands}
+                }}
+            }}
+        }}
+        """
 
         return config
 
@@ -80,7 +73,7 @@ class NginxBase(Stand):
 
         LOG.debug('Nginx config: %s', filepath)
 
-        return run_command_detached('%s -c %s' % (self.prc_name, filepath))
+        return run_command_detached(f"{self.prc_name} -c {filepath}")
 
 
 class NginxSslBase(NginxBase):
@@ -96,9 +89,9 @@ class NginxSslBase(NginxBase):
 
         config = config.replace('backlog=', 'ssl backlog=')
         config = config.replace(
-            'server_name _;', 'ssl_certificate %s;\n'
-                              'ssl_certificate_key %s;\n'
-                              'server_name _;' % (cert, key))
+            "server_name _;", f"ssl_certificate {cert};\n"
+                              f"ssl_certificate_key {key};\n"
+                              "server_name _;")
 
         return config
 
@@ -134,9 +127,9 @@ class NginxWithUwsgiBackend:
         address = uwsgi.address
 
         if self.unix_socket:
-            address = 'unix://%s' % address
+            address = f"unix://{address}"
 
-        commands = 'uwsgi_pass %s;\n' % address
+        commands = f"uwsgi_pass {address};\n"
         commands += uwsgi.params_stub
 
         return commands

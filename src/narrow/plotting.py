@@ -17,10 +17,11 @@ else:
     plot_method = partial(plotly.offline.plot, filename=Settings.FILENAME_STATS_PLOT)
 
 
-def plot(stats):
+def plot(stats: dict) -> str:
+    """Render saved throughput statistics using the legacy Plotly presentation."""
     scatters = []
 
-    def new_line(title, results):
+    def new_line(title: str, results: list) -> go.Scatter:
 
         data_rps = []
         data_clients = []
@@ -62,7 +63,7 @@ def plot(stats):
         'data': scatters,
         'layout': go.Layout(
 
-            title='Throughput.<br>Gathered on %s UTC.<br>%s.' % (date, ' | '.join(versions)),
+            title=f"Throughput.<br>Gathered on {date} UTC.<br>{' | '.join(versions)}.",
             xaxis={
                 'title': 'Clients count',
             },

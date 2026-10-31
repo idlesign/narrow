@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from time import sleep
 
-from ._base import PythonComponent, OSComponent
+from ._base import OSComponent, PythonComponent
+from .apps import APPS
 from .benchers import BENCHERS
 from .configuration import bootstrap
 from .stands import STANDS
-from .apps import APPS
 from .utils import get_logger
 
 LOG = get_logger(__name__)
@@ -14,12 +14,13 @@ LOG = get_logger(__name__)
 def get_component(registry, alias=None):
 
     if not alias:
-        alias = list(registry.keys())[0]
+        alias = next(iter(registry))
 
     return registry[alias]
 
 
 def stand_run(*, stand_alias, app_alias=None):
+    """Run a selected stand until interrupted, then invoke its cleanup."""
 
     bootstrap()
 
@@ -32,6 +33,7 @@ def stand_run(*, stand_alias, app_alias=None):
 
 
 def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
+    """Run selected stand/application combinations and return their statistics."""
 
     bootstrap()
     app_aliases = app_aliases or list(APPS.keys())
@@ -42,7 +44,7 @@ def gather_stats(*, bencher_alias, stand_alias=None, app_aliases=None):
 
     stats = {
         'meta': {
-            'date': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S'),
+            'date': datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S'),
             'versions': versions,
             'settings': {},  # e.g. connections_max
         },

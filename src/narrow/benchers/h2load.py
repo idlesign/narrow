@@ -1,11 +1,11 @@
 import re
 
-from ._base import Bencher, register_bencher
 from ..exceptions import BencherException
-from ..utils import run_command, get_logger
+from ..utils import get_logger, run_command
+from ._base import Bencher, register_bencher
 
-RE_RPS = re.compile('finished in [^,]+, (\d+.\d+) req/s,')
-RE_STATUS = re.compile('status codes: (\d+) 2xx, (\d+) 3xx, (\d+) 4xx, (\d+) 5xx')
+RE_RPS = re.compile(r"finished in [^,]+, (\d+.\d+) req/s,")
+RE_STATUS = re.compile(r"status codes: (\d+) 2xx, (\d+) 3xx, (\d+) 4xx, (\d+) 5xx")
 
 LOG = get_logger(__name__)
 
@@ -20,21 +20,21 @@ class H2loadBencher(Bencher):
     prc_name = 'h2load'
     description = 'h2load from nghttp2'
 
-    def get_version(self):
-        return run_command('%s --version' % self.prc_name)
+    def get_version(self) -> str:
+        return run_command(f"{self.prc_name} --version")
 
     @classmethod
-    def fire(cls, url, *, num_clients, num_requests):
+    def fire(cls, url: str, *, num_clients: int, num_requests: int) -> str:
 
         out = run_command(
-            '%s --h1 -c %s -n %s %s' % (cls.prc_name, num_clients, num_requests, url))
+            f"{cls.prc_name} --h1 -c {num_clients} -n {num_requests} {url}")
 
         match_rps = RE_RPS.search(out)
         match_status = RE_STATUS.search(out)
 
         if not match_rps or not match_status:
             LOG.debug(out)
-            raise BencherException('Failed to parse results data:\n%s' % out)
+            raise BencherException(f"Failed to parse results data:\n{out}")
 
         success_count = int(match_status.group(1))
 

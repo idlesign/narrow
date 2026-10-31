@@ -1,0 +1,28 @@
+site_name: narrow
+site_description: Naive throughput measurements for Python web apps and servers
+repo_url: https://github.com/idlesign/narrow
+edit_uri: edit/master/docs/
+
+plugins:
+  - search
+  - navsorted
+  - apidescribed
+
+theme:
+  name: material
+  palette:
+    primary: green
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.indexes
+    - navigation.top
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true

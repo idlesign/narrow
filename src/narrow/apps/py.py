@@ -1,4 +1,4 @@
-from ._base import register_app, App
+from ._base import App, register_app
 
 
 @register_app
